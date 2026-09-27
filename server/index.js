@@ -100,6 +100,42 @@ function captureListeningContext(text = "") {
   return null;
 }
 
+function updateListeningContext(t, text = "") {
+  const raw = String(text || "").trim();
+  if (!raw || raw.length < 2) return;
+  const next = { ...(t.listeningContext || {}), updatedAt: Date.now() };
+  if (/通勤|地铁|公交|开车|路上|赶路|出门/.test(raw)) next.scene = "通勤或移动中";
+  else if (/工作|上班|写代码|写稿|专注|学习|看书/.test(raw)) next.scene = "专注工作";
+  else if (/睡|夜里|深夜|睡前|晚上/.test(raw)) next.scene = "夜间";
+  else if (/做饭|厨房|家务|洗碗/.test(raw)) next.scene = "日常家务";
+  if (/累|疲惫|困|低电量|没劲|丧/.test(raw)) { next.mood = "疲惫"; next.energy = "low"; }
+  if (/烦|焦虑|压力|崩溃|心乱|不爽/.test(raw)) { next.mood = "烦躁"; next.energy = "low"; }
+  if (/开心|兴奋|有劲|提神|来点劲/.test(raw)) next.energy = "high";
+  if (/安静|别说话|少人声|不要人声|不想被打扰/.test(raw)) next.avoid = [...new Set([...(next.avoid || []), "过多的人声或播报"])];
+  if (/吵|太炸|太重|慢一点|放松|舒缓/.test(raw)) next.avoid = [...new Set([...(next.avoid || []), "过高的能量"])];
+  if (/新歌|没听过|探索|大胆/.test(raw)) next.explore = true;
+  if (/熟悉|喜欢的|老歌|听过/.test(raw)) next.explore = false;
+  t.listeningContext = next;
+  t.moodHint = `结合本次对话调整后续：${next.scene || "当前场景"}，${next.mood || "当前情绪"}，能量 ${next.energy || "适中"}${next.explore ? "，允许探索新歌" : ""}`;
+}
+
+function broadcastGuide(t, kind = "next") {
+  if (kind !== "start" && Date.now() - (t.lastGuideAt || 0) < 180_000) return;
+  const guides = {
+    start: {
+      question: "今天想让电台陪你做什么？",
+      options: [["通勤路上", "我在通勤路上，后面来点有推进感的"], ["专注工作", "我要专注工作，后面少一点人声"], ["放松一下", "我想放松一下，后面安静一点"], ["想听新歌", "后面给我多安排一点没听过的新歌"]],
+    },
+    next: {
+      question: "下一段想怎么走？",
+      options: [["保持现在", "后面保持现在的感觉就好"], ["更有推进感", "后面稍微更有推进感一点"], ["安静一点", "后面安静一点，少一点人声"], ["来点新歌", "后面多安排一点没听过的新歌"]],
+    },
+  };
+  const guide = guides[kind] || guides.next;
+  t.lastGuideAt = Date.now();
+  t.broadcast({ type: "guide", question: guide.question, options: guide.options.map(([label, text]) => ({ label, text })) });
+}
+
 // LRC 解析：返回 [{t: ms, text}]
 function parseLRC(text) {
   if (!text) return [];
@@ -219,6 +255,7 @@ async function bootWelcome(t) {
     introText: introText || "",
     introUrl: introSynth?.url || null,
   });
+  broadcastGuide(t, "start");
   broadcastLyricFor(t, track);
   console.log(`[tenant ${t.uid}] welcome ${track.title} — ${track.artist} (greeting=${!!greetingSynth} intro=${!!introSynth})`);
   if (!introText) backfillIntroIfMissing(t, track).catch(() => {});
@@ -554,6 +591,7 @@ async function advance(t) {
     t.playState.paused = false;
     t.broadcast({ type: "now", track: t.nowPlaying });
     t.broadcast({ type: "state", paused: false });
+    broadcastGuide(t, "next");
     broadcastLyricFor(t, t.nowPlaying);
     scheduleTrackEvents(t, t.nowPlaying);
     // 流式 intro：歌开始 ~5s 后开始流式生成 + 边出文字边并行 TTS
@@ -911,6 +949,7 @@ wss.on("connection", async (ws, req) => {
     if (m.type === "chat") {
       ws.send(JSON.stringify({ type: "chat-ack", text: m.text }));
       try {
+        updateListeningContext(t, m.text);
         const listeningContext = captureListeningContext(m.text);
         if (listeningContext) {
           t.moodHint = listeningContext.hint;
@@ -933,6 +972,10 @@ wss.on("connection", async (ws, req) => {
           // 流式：边生成边推 dj-chunk + 并行 TTS
           streamTalkReply(t, r.text || m.text).catch((e) =>
             console.warn(`[tenant ${t.uid}] talk stream: ` + e.message));
+          t.invalidatePrefetch();
+          broadcastQueue(t);
+          prefetchNext(t).catch((e) => console.warn(`[tenant ${t.uid}] dialogue prefetch: ${e.message}`));
+          broadcastGuide(t, "next");
           return;
         }
         const built = r.mode === "dj"

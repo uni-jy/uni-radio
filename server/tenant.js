@@ -51,6 +51,14 @@ export class Tenant {
     this.waitingForNext = false;
     this.moodHint = "";
     this.intentCandidates = [];
+    this.listeningContext = {
+      mood: "",
+      scene: "",
+      energy: "",
+      avoid: [],
+      updatedAt: 0,
+    };
+    this.lastGuideAt = 0;
 
     this.recentPlays = [];
     this.dislikedTracks = new Set();

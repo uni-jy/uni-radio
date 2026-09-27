@@ -26,7 +26,7 @@ function nowStr() {
  * @param {object} opts.tenant      ← 必传：当前请求所属的 Tenant
  * @returns {Promise<{system:string, user:string}>}
  */
-export async function build({ userText = "", trigger = "chat", recentPlays = [], tenant, slot, userHint = null } = {}) {
+export async function build({ userText = "", trigger = "chat", recentPlays = [], tenant, slot, userHint = null, listeningContext = null } = {}) {
   if (!tenant) throw new Error("context.build 需要 tenant");
   const [persona, taste, routines] = await Promise.all([
     readSafe(path.join(ROOT, "server/prompts/dj-persona.md")),
@@ -35,6 +35,10 @@ export async function build({ userText = "", trigger = "chat", recentPlays = [],
   ]);
 
   const env = `## 当前环境\n- 时间：${nowStr()}\n- 触发：${trigger}\n- 听众：${tenant.displayName}`;
+
+  const contextBlock = listeningContext && (listeningContext.mood || listeningContext.scene || listeningContext.energy || listeningContext.avoid?.length)
+    ? `## 本次对话形成的听歌上下文\n- 情绪：${listeningContext.mood || "未明确"}\n- 场景：${listeningContext.scene || "未明确"}\n- 能量：${listeningContext.energy || "未明确"}\n- 避免：${listeningContext.avoid?.length ? listeningContext.avoid.join("、") : "无"}\n只把它作为后续几首歌的方向参考；不要为了迎合标签而推荐与听众画像无关的歌。`
+    : "";
 
   const plays = recentPlays.length
     ? "## 最近播放（新→旧）\n" + recentPlays.slice(0, 10).map(p => `- ${p.title} — ${p.artist}`).join("\n")
@@ -95,7 +99,7 @@ export async function build({ userText = "", trigger = "chat", recentPlays = [],
     routines && `## 日常节律（routines.md）\n${routines.trim()}`,
   ].filter(Boolean).join("\n\n");
 
-  const system = [directive, persona.trim(), userBlocks, env, plays, avoidRecent, rotation].filter(Boolean).join("\n\n");
+  const system = [directive, persona.trim(), userBlocks, env, contextBlock, plays, avoidRecent, rotation].filter(Boolean).join("\n\n");
 
   const user = userText
     ? `用户说：${userText}`

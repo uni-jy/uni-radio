@@ -155,6 +155,26 @@ function you(text) { bubble("you", text); }
 function dj(text, kind, who) { bubble("dj " + (kind || ""), text, who || "Unico"); }
 function nowLine(text) { bubble("now", text); }
 
+function startClientSession() {
+  if (started) return;
+  started = true;
+  setControlsActive(true);
+  $("btn-start").disabled = true;
+  $("btn-start").hidden = true;
+  prepareVoicePlayback();
+  music.play().then(() => music.pause()).catch(() => {});
+  send({ type: "claim" });
+  send({ type: "control", action: "start-radio" });
+  startSession();
+}
+
+function sendChatText(text) {
+  const value = String(text || "").trim();
+  if (!value || !ws || ws.readyState !== 1) return;
+  send({ type: "chat", text: value });
+  if (!started) startClientSession();
+}
+
 function send(obj) {
   bufferedSender.send(obj);
 }
@@ -931,11 +951,33 @@ function applyTheme() {
 applyTheme();
 
 // ===== chat chips =====
+function renderGuide(guide) {
+  const wrap = $("chat-chips");
+  if (!wrap || !guide?.question || !Array.isArray(guide.options)) return;
+  wrap.innerHTML = "";
+  const question = document.createElement("div");
+  question.className = "guide-question";
+  question.textContent = guide.question;
+  wrap.appendChild(question);
+  for (const option of guide.options.slice(0, 4)) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chip guide-chip";
+    button.textContent = option.label || option.text || "继续";
+    button.addEventListener("click", () => {
+      sendChatText(option.text || option.label);
+      wrap.setAttribute("hidden", "");
+    }, { once: true });
+    wrap.appendChild(button);
+  }
+  wrap.removeAttribute("hidden");
+}
+
 document.querySelectorAll(".chip[data-chip]").forEach((c) => {
   c.addEventListener("click", () => {
     const text = c.dataset.chip;
     if (!ws || ws.readyState !== 1) return;
-    send({ type: "chat", text });
+    sendChatText(text);
     session.chats++; refreshStats();
   });
 });
@@ -1036,6 +1078,7 @@ function connectWS() {
       session.chats++; refreshStats();
     }
     if (m.type === "chat-fail") sys("× " + (m.reason || "fail") + (m.error ? " — " + m.error.slice(0, 120) : ""));
+    if (m.type === "guide") renderGuide(m);
     if (m.type === "dj") {
       const tag = { talk: "Unico · 聊天", intro: "Unico · 介绍", tease: "Unico · 预告", mid: "Unico · 中段" }[m.kind] || "Unico";
       dj(m.say, m.kind || "intro", tag);
@@ -1192,17 +1235,8 @@ document.getElementById("chat-form").addEventListener("submit", (e) => {
   const input = $("chat-input");
   const text = input.value.trim();
   if (!text || !ws || ws.readyState !== 1) return;
-  send({ type: "chat", text });
+  sendChatText(text);
   input.value = "";
-  if (!started) {
-    started = true;
-    setControlsActive(true);
-    $("btn-start").disabled = true;
-    $("btn-start").hidden = true;
-    prepareVoicePlayback();
-    music.play().then(() => music.pause()).catch(() => {});
-    startSession();
-  }
 });
 
 music.addEventListener("ended", () => {

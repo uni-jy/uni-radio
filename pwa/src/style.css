@@ -1226,6 +1226,21 @@ body.window-mode .bubble {
   gap: 8px;
 }
 
+.guide-question {
+  width: 100%;
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: .02em;
+  margin-bottom: 1px;
+}
+
+.guide-chip {
+  min-height: 32px;
+  color: var(--fg);
+  border-color: var(--border-soft);
+}
+
 .chip {
   min-height: 30px;
   padding: 5px 10px;

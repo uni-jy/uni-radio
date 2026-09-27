@@ -106,6 +106,7 @@ async function runDJ(raw, ctx) {
     tenant: ctx.tenant,
     slot: ctx.slot,
     userHint: ctx.userHint,
+    listeningContext: ctx.listeningContext || ctx.tenant?.listeningContext,
   });
   let out;
   try { out = await askClaude({ system, user }); }

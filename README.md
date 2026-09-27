@@ -16,6 +16,7 @@ Unico is a personal AI radio web app. It imports your music profile, builds a li
 - **AI listener portrait**: turns playlists, weekly charts, and all-time charts into an editable `taste.md`.
 - **Private radio host**: introduces songs, reacts to chat, and gives gentle transitions.
 - **Music-aware chat**: talk to Unico while a track is playing; music ducks under the voice.
+- **Proactive listening prompts**: Unico asks lightweight, optional questions about the current scene and uses the answers to reshape the next few tracks.
 - **Discovery queue**: keeps upcoming tracks ready and avoids recently skipped or disliked songs.
 - **Multi-device control**: several browsers can connect, but only the active client plays audio.
 - **Local-first data model**: each visitor gets an isolated tenant under `data/users/<uid>`.
@@ -81,6 +82,8 @@ Unico opens a setup wizard for new users:
 3. Unico imports playlists and listening records when available.
 4. The LLM drafts a listener portrait.
 5. Review and save the portrait, then start the radio.
+
+Once the radio is playing, Unico offers small choices such as “通勤路上”, “专注工作”, “放松一下”, or “想听新歌”. You can tap one or type naturally in the chat box. The current track keeps playing while the Seed-powered context is applied to the next queue; prompts are rate-limited and never block playback.
 
 The public profile path does not require login. It can only read public playlists, but it is enough to start Unico when NetEase blocks QR login.
 
