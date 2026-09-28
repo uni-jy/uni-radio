@@ -1097,7 +1097,9 @@ function connectWS() {
     }
     if (m.type === "boot-progress") {
       showBoot();
-      setThinking("");
+      const status = $("boot-status");
+      if (status && m.msg) status.textContent = m.msg;
+      setThinking(m.msg || "");
     }
     if (m.type === "boot-ready") {
       hideBootSoon();
@@ -1107,6 +1109,7 @@ function connectWS() {
     if (m.type === "boot-fail") {
       hideBoot();
       sys("× 开台失败：" + m.msg);
+      setThinking("");
       $("btn-start").disabled = false;
       $("btn-start").textContent = "重试开台";
     }
@@ -1144,6 +1147,8 @@ function connectWS() {
 function showBoot() {
   const ov = $("boot-overlay");
   ov.removeAttribute("hidden");
+  const status = $("boot-status");
+  if (status) status.textContent = "正在准备下一段音乐…";
 }
 function hideBoot() { $("boot-overlay").setAttribute("hidden", ""); }
 function hideBootSoon() {

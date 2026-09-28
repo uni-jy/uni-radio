@@ -2000,6 +2000,15 @@ body.window-mode .bubble {
   box-shadow: var(--panel-shadow);
 }
 
+.boot-status {
+  margin-top: 18px;
+  max-width: 280px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+
 .taste-modal-card {
   width: min(720px, 92vw);
   max-height: 86vh;

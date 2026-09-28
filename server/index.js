@@ -301,8 +301,17 @@ async function bootDiscoveryRadio(t) {
   t.waitingForNext = true;
   t.playState.paused = true;
   t.broadcast({ type: "state", paused: true });
-  t.broadcast({ type: "boot-progress", step: 1, total: 1, msg: "" });
-  await prefetchNext(t, { waitForTarget: true, minReady: BOOT_MIN_QUEUE });
+  t.broadcast({ type: "boot-progress", step: 0, total: 5, msg: "正在读取你的听歌偏好…" });
+  const completed = await Promise.race([
+    prefetchNext(t, { waitForTarget: true, minReady: BOOT_MIN_QUEUE }).then(() => true),
+    sleep(90_000).then(() => false),
+  ]);
+  if (!completed) {
+    t.invalidatePrefetch();
+    t.waitingForNext = false;
+    t.broadcast({ type: "boot-fail", msg: "准备音乐超时了。请检查 Seed API 和网易云连接后重试。" });
+    return false;
+  }
   if (!t.queue.length) {
     t.waitingForNext = false;
     t.broadcast({ type: "boot-fail", msg: "新歌队列没有生成成功，稍后再试一次" });
@@ -453,6 +462,9 @@ async function prefetchNext(t, { waitForTarget = false, minReady = QUEUE_TARGET 
   try {
     for (let attempt = 1; attempt <= 5 && t.queue.length < QUEUE_TARGET; attempt++) {
       if (aborted()) { console.log(`[tenant ${t.uid}] prefetch 作废`); return; }
+      if (waitForTarget) {
+        t.broadcast({ type: "boot-progress", step: attempt, total: 5, msg: `正在寻找适合你的音乐（${attempt}/5）…` });
+      }
       console.log(`[tenant ${t.uid}] prefetch unheard (${trigger}) attempt ${attempt}/5 queue=${t.queue.length}/${QUEUE_TARGET}`);
       const r = await handleChat("", {
         recentPlays: t.recentPlays, trigger, tenant: t,
