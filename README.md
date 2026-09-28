@@ -46,8 +46,8 @@ flowchart LR
 ### Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/unico.git
-cd unico
+git clone https://github.com/YOUR_USERNAME/uni-radio.git
+cd uni-radio
 npm install
 cp .env.example .env
 ```
@@ -114,7 +114,7 @@ The public profile path does not require login. It can only read public playlist
 ## Project Structure
 
 ```text
-unico/
+uni-radio/
 ├── pwa/                  # PWA shell, styles, player logic, service worker
 ├── server/               # HTTP server, WebSocket runtime, setup API, LLM/TTS/NCM adapters
 │   ├── prompts/          # Radio host prompt fragments

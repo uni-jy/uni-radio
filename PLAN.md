@@ -68,7 +68,7 @@
 ## 2. 目录结构
 
 ```
-unico/
+uni-radio/
 ├── PLAN.md                  ← 本文件
 ├── README.md
 ├── package.json
