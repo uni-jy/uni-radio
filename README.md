@@ -1,22 +1,22 @@
-# Unico
+# Uni radio
 
 > A local-first AI radio host that learns your NetEase Cloud Music taste, curates the next track, and talks over the music like a tiny private DJ.
 
-![Unico app preview](docs/assets/unico-preview.svg)
+![Uni radio app preview](docs/assets/uni-radio-preview.svg)
 
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-3c873a)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Local-first](https://img.shields.io/badge/privacy-local--first-black)](#privacy)
 
-Unico is a personal AI radio web app. It imports your music profile, builds a listener portrait, keeps a small queue of tracks, and generates short spoken commentary while the music plays. It is designed to run on your own machine: cookies, playlists, listening notes, generated voice files, and feedback logs stay local unless you choose to deploy it somewhere else.
+Uni radio is a personal AI radio web app. It imports your music profile, builds a listener portrait, keeps a small queue of tracks, and generates short spoken commentary while the music plays. It is designed to run on your own machine: cookies, playlists, listening notes, generated voice files, and feedback logs stay local unless you choose to deploy it somewhere else.
 
 ## Highlights
 
 - **Taste onboarding**: QR login, SMS login, Cookie fallback, or public NetEase profile import.
 - **AI listener portrait**: turns playlists, weekly charts, and all-time charts into an editable `taste.md`.
 - **Private radio host**: introduces songs, reacts to chat, and gives gentle transitions.
-- **Music-aware chat**: talk to Unico while a track is playing; music ducks under the voice.
-- **Proactive listening prompts**: Unico asks lightweight, optional questions about the current scene and uses the answers to reshape the next few tracks.
+- **Music-aware chat**: talk to Uni radio while a track is playing; music ducks under the voice.
+- **Proactive listening prompts**: Uni radio asks lightweight, optional questions about the current scene and uses the answers to reshape the next few tracks.
 - **Discovery queue**: keeps upcoming tracks ready and avoids recently skipped or disliked songs.
 - **Multi-device control**: several browsers can connect, but only the active client plays audio.
 - **Local-first data model**: each visitor gets an isolated tenant under `data/users/<uid>`.
@@ -57,10 +57,12 @@ Edit `.env`:
 ```bash
 PORT=8080
 SEED_MODEL=doubao-seed-2-1-pro-260915
+# 实时选歌默认关闭深度思考以降低等待时间；完整推理可改为 enabled
+SEED_THINKING=disabled
 SEED_API_KEY=your_volcengine_ark_key_here
 SEED_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 
-# Optional: voice generation. Without this, Unico falls back to macOS say.
+# Optional: voice generation. Without this, Uni radio falls back to macOS say.
 FISH_API_KEY=
 FISH_VOICE_ID=
 ```
@@ -75,17 +77,17 @@ Open [http://localhost:8080](http://localhost:8080).
 
 ## First Run
 
-Unico opens a setup wizard for new users:
+Uni radio opens a setup wizard for new users:
 
 1. Log in with NetEase QR scan.
 2. If QR is blocked, use SMS, Cookie, or "public profile import".
-3. Unico imports playlists and listening records when available.
+3. Uni radio imports playlists and listening records when available.
 4. The LLM drafts a listener portrait.
 5. Review and save the portrait, then start the radio.
 
-Once the radio is playing, Unico offers small choices such as “通勤路上”, “专注工作”, “放松一下”, or “想听新歌”. You can tap one or type naturally in the chat box. The current track keeps playing while the Seed-powered context is applied to the next queue; prompts are rate-limited and never block playback.
+Once the radio is playing, Uni radio offers small choices such as “通勤路上”, “专注工作”, “放松一下”, or “想听新歌”. You can tap one or type naturally in the chat box. The current track keeps playing while the Seed-powered context is applied to the next queue; prompts are rate-limited and never block playback.
 
-The public profile path does not require login. It can only read public playlists, but it is enough to start Unico when NetEase blocks QR login.
+The public profile path does not require login. It can only read public playlists, but it is enough to start Uni radio when NetEase blocks QR login.
 
 ## Environment Variables
 
@@ -93,6 +95,7 @@ The public profile path does not require login. It can only read public playlist
 | --- | --- | --- |
 | `PORT` | No | HTTP/WebSocket port. Defaults to `8080`. |
 | `SEED_MODEL` | No | Chat model name. Defaults to `doubao-seed-2-1-pro-260915`. |
+| `SEED_THINKING` | No | `disabled`（默认，实时电台推荐）或 `enabled`。 |
 | `SEED_API_KEY` | Yes* | Volcengine Ark API key for Seed chat completions. |
 | `SEED_BASE_URL` | No | Defaults to `https://ark.cn-beijing.volces.com/api/v3`. |
 | `VOLCENGINE_API_KEY` | No | `SEED_API_KEY` 的兼容变量名。 |
@@ -125,14 +128,14 @@ unico/
 
 ## Privacy
 
-Unico is built as a local-first app.
+Uni radio is built as a local-first app.
 
 - `.env`, `data/`, `cache/`, and NetEase cookies are ignored by Git.
 - NetEase cookies are stored under `data/users/<uid>/ncm-cookie.txt`.
 - Generated playlist dumps and listener portraits are stored under `data/users/<uid>/`.
 - TTS audio cache is stored under `cache/tts/`.
 
-Do not commit `.env`, `data/`, `cache/`, or copied cookies. If you deploy Unico publicly, protect the instance as you would protect any app that can hold user login cookies.
+Do not commit `.env`, `data/`, `cache/`, or copied cookies. If you deploy Uni radio publicly, protect the instance as you would protect any app that can hold user login cookies.
 
 ## Development
 
@@ -163,7 +166,7 @@ node --check pwa/src/player.js
 | QR status stays at `801` | The app is waiting for a scan. Regenerate the QR if it expires. |
 | QR status reaches `802` but not `803` | The phone scanned the code but did not complete confirmation. |
 | Fish Audio returns `402` | Add API credits in Fish Audio Billing, or set `TTS_PROVIDER=say`. |
-| NetEase API returns intermittent `502` | Unico retries automatically; wait and retry import. |
+| NetEase API returns intermittent `502` | Uni radio retries automatically; wait and retry import. |
 | No voice on non-macOS systems without Fish | Configure Fish Audio, or add another TTS provider in `server/tts.js`. |
 
 ## Roadmap

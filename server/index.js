@@ -1,4 +1,4 @@
-// Unico server — 多租户版
+// Uni radio server — 多租户版
 // 每个用户用 cookie `unico-uid` 区分；每个用户在 data/users/<uid>/ 有自己的 taste / playlists / 反馈
 // server 进程内 Map<uid, Tenant>，所有播放状态、队列、prefetch 都按 tenant 分桶
 import "./_env.js";
@@ -11,7 +11,7 @@ import { synth } from "./tts.js";
 import { resolveOne, lyric as ncmLyric } from "./adapters/ncm.js";
 import { askIntro, askIntroStreaming, askTalk, askTalkStreaming, breaker as claudeBreaker } from "./claude.js";
 import { getTenant, listTenants, newGuestUid, OWNER_UID } from "./tenant.js";
-import { BOOT_MIN_QUEUE, QUEUE_TARGET, buildKnownTrackSet, filterUnheardCandidates } from "./playlist-policy.js";
+import { QUEUE_TARGET, buildKnownTrackSet, filterUnheardCandidates } from "./playlist-policy.js";
 import { loadPlaybackState, savePlaybackState } from "./playback-state.js";
 import { CODE_ROOT, TTS_DIR, USERS_DIR } from "./paths.js";
 import { hydrateUserFiles, persistUserFiles } from "./user-storage.js";
@@ -182,11 +182,11 @@ function greetingText() {
   else if (hour < 18)  { when = "下午";   question = "下午过得怎么样？"; }
   else if (hour < 22)  { when = "傍晚";   question = "今天忙得怎么样？"; }
   else                 { when = "夜里";   question = "今天还行吗？"; }
-  return `Hi，这里是 Unico。周${wk}${when}好，${question}`;
+  return `Hi，这里是 Uni radio。周${wk}${when}好，${question}`;
 }
 
 const BOOT_LINES = [
-  "Unico 在挑今天的第一首歌…",
+  "Uni radio 在挑今天的第一首歌…",
   "在为你写这首歌的乐评…",
   "调整呼吸，准备问好…",
   "麦克风预热…",
@@ -194,6 +194,12 @@ const BOOT_LINES = [
 ];
 
 async function bootWelcome(t) {
+  if (t.booting) return false;
+  t.booting = true;
+  const bootToken = t.bootToken = (t.bootToken || 0) + 1;
+  t.invalidatePrefetch();
+  t.clearTrackEvents();
+  try {
   if (!t.welcomePool.length) {
     t.broadcast({ type: "boot-fail", msg: "你还没完成初次设置（请先扫码导入歌单）" });
     return false;
@@ -232,6 +238,8 @@ async function bootWelcome(t) {
   }
   const greetingSynth = await greetingSynthPromise;
 
+  if (t.bootToken !== bootToken) return false;
+
   t.broadcast({ type: "boot-progress", step: 4, total: 4, msg: BOOT_LINES[3] });
 
   t.nowPlaying = {
@@ -260,6 +268,9 @@ async function bootWelcome(t) {
   console.log(`[tenant ${t.uid}] welcome ${track.title} — ${track.artist} (greeting=${!!greetingSynth} intro=${!!introSynth})`);
   if (!introText) backfillIntroIfMissing(t, track).catch(() => {});
   return true;
+  } finally {
+    if (t.bootToken === bootToken) t.booting = false;
+  }
 }
 
 function readPlaylists(t) {
@@ -303,7 +314,8 @@ async function bootDiscoveryRadio(t) {
   t.broadcast({ type: "state", paused: true });
   t.broadcast({ type: "boot-progress", step: 0, total: 5, msg: "正在读取你的听歌偏好…" });
   const completed = await Promise.race([
-    prefetchNext(t, { waitForTarget: true, minReady: BOOT_MIN_QUEUE }).then(() => true),
+    // 先拿到一首就开台，剩余队列在后台补齐，避免第二轮推荐拖住首屏。
+    prefetchNext(t, { waitForTarget: true, minReady: 1 }).then(() => true),
     sleep(90_000).then(() => false),
   ]);
   if (!completed) {
@@ -524,8 +536,10 @@ async function prefetchNext(t, { waitForTarget = false, minReady = QUEUE_TARGET 
       setTimeout(() => { if (t.waitingForNext) prefetchNext(t).catch(() => {}); }, 30_000);
     }
   } finally {
-    t.prefetching = false;
-    broadcastQueue(t);
+    if (!aborted()) {
+      t.prefetching = false;
+      broadcastQueue(t);
+    }
   }
 }
 
@@ -927,13 +941,15 @@ wss.on("connection", async (ws, req) => {
   t.clients.add(ws);
   if (!t.activeClient) t.activeClient = ws;
 
-  ws.send(JSON.stringify({ type: "hello", msg: "Unico online", clientId: ws._id, uid, displayName: t.displayName, hasSetup: t.hasSetup() }));
+  ws.send(JSON.stringify({ type: "hello", msg: "Uni radio online", clientId: ws._id, uid, displayName: t.displayName, hasSetup: t.hasSetup() }));
   ws.send(JSON.stringify({ type: "role", active: ws === t.activeClient }));
   ws.send(JSON.stringify({ type: "now", track: t.nowPlaying }));
   ws.send(JSON.stringify({ type: "state", paused: t.playState.paused }));
   broadcastQueue(t);
   if (claudeBreaker.isOpen()) {
-    ws.send(JSON.stringify({ type: "claude-state", open: true, remainingMs: claudeBreaker.remaining() }));
+    ws.send(JSON.stringify({ type: "claude-state", ...claudeBreaker.status(), remainingMs: claudeBreaker.remaining() }));
+  } else {
+    ws.send(JSON.stringify({ type: "claude-state", ...claudeBreaker.status() }));
   }
 
   ws.on("close", () => {
@@ -1038,7 +1054,7 @@ wss.on("connection", async (ws, req) => {
           return;
         }
         if (t.nowPlaying.source === "local") {
-          bootDiscoveryRadio(t).catch(e => {
+          bootWelcome(t).catch(e => {
             console.warn(`[tenant ${t.uid}] discovery boot: ` + e.message);
             t.broadcast({ type: "boot-fail", msg: e.message || "开台失败" });
           });
@@ -1052,11 +1068,13 @@ wss.on("connection", async (ws, req) => {
         return;
       }
       if (m.action === "reset") {
+        t.bootToken = (t.bootToken || 0) + 1;
+        t.booting = false;
         t.invalidatePrefetch();
         t.clearTrackEvents();
         t.waitingForNext = false;
         t.moodHint = "";
-        t.nowPlaying = { title: "Unico 待机", artist: "—", url: "/media/sample.m4a", source: "local" };
+        t.nowPlaying = { title: "Uni radio 待机", artist: "—", url: "/media/sample.m4a", source: "local" };
         t.playState.paused = true;
         t.broadcast({ type: "now", track: t.nowPlaying });
         t.broadcast({ type: "state", paused: true });
@@ -1088,7 +1106,7 @@ if (fs.existsSync(path.join(USERS_DIR, OWNER_UID))) {
 
 export function startServer(port = PORT) {
   return server.listen(port, () => {
-    console.log(`[unico] http://localhost:${port}  ws://localhost:${port}/stream`);
+    console.log(`[uni-radio] http://localhost:${port}  ws://localhost:${port}/stream`);
   });
 }
 

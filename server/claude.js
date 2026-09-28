@@ -12,6 +12,7 @@ const BREAKER = {
   cooldownMs: 5 * 60_000,  // 锁死时长
   failures: 0,
   openUntil: 0,
+  status: "unknown",
   listeners: new Set(),
 };
 function isBreakerOpen() {
@@ -25,15 +26,21 @@ function notifyBreaker(state) {
   for (const fn of BREAKER.listeners) { try { fn(state); } catch {} }
 }
 function noteSuccess() {
+  const changed = BREAKER.status !== "connected";
+  BREAKER.status = "connected";
   if (BREAKER.failures > 0 || BREAKER.openUntil > Date.now()) {
     BREAKER.failures = 0;
     BREAKER.openUntil = 0;
     notifyBreaker({ open: false, reason: "recovered" });
     console.log("[llm] 服务恢复，熔断器重置");
+  } else if (changed) {
+    notifyBreaker({ open: false, status: "connected" });
   }
 }
 function noteFailure(err) {
   BREAKER.failures++;
+  BREAKER.status = "unavailable";
+  notifyBreaker({ open: false, status: "unavailable" });
   if (BREAKER.failures >= BREAKER.threshold && !isBreakerOpen()) {
     BREAKER.openUntil = Date.now() + BREAKER.cooldownMs;
     notifyBreaker({ open: true, until: BREAKER.openUntil, failures: BREAKER.failures });
@@ -47,7 +54,8 @@ class LLMUnavailable extends Error {
     this.remaining = remaining;
   }
 }
-export const breaker = { isOpen: isBreakerOpen, remaining: remainingMs, onChange: onBreakerChange };
+export const breaker = { isOpen: isBreakerOpen, remaining: remainingMs, onChange: onBreakerChange,
+  status: () => ({ open: isBreakerOpen(), status: BREAKER.status }) };
 
 async function runLLM(prompt, { systemPrompt, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   if (isBreakerOpen()) {

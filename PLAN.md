@@ -1,4 +1,4 @@
-# Unico · 个人 AI 电台 — 规划文档
+# Uni radio · 个人 AI 电台 — 规划文档
 
 > 一句话：读懂我的听歌习惯 → 规划当下该听的声音 → 像 DJ 那样播报出来。
 > 形态：本地 PWA + Node 中枢 + Seed 2.1 Pro API 做"大脑"。通过 OpenAI-compatible 接口调用。
@@ -21,7 +21,7 @@
 
 | 模块 | 作用 | 关键文件 / 端点 |
 |---|---|---|
-| **USER** 用户品味语料 | 让 Unico 真正属于"我" | `user/taste.md`、`user/routines.md`、`user/playlists.json`、`user/mood-rules.md` |
+| **USER** 用户品味语料 | 让 Uni radio 真正属于"我" | `user/taste.md`、`user/routines.md`、`user/playlists.json`、`user/mood-rules.md` |
 | **BRAIN** Seed 2.1 Pro | OpenAI-compatible HTTP 调用 | `SEED_BASE_URL` + `SEED_MODEL` |
 | **MUSIC** NeteaseCloudMusicApi | 歌曲检索 / 直链 / 歌词 / 推荐 | `search`、`song_url`、`lyric`、`recommend` |
 | **VOICE & I/O** | 声音、日程、天气、客厅 | Fish Audio TTS、飞书 (Lark) 日历、OpenWeather、UPnP (Naim) |

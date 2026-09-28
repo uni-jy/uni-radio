@@ -2,9 +2,9 @@
 
 ## Our Pledge
 
-We want Unico to be a welcoming project for people building personal, local-first music tools. We pledge to make participation respectful and harassment-free.
+We want Uni radio to be a welcoming project for people building personal, local-first music tools. We pledge to make participation respectful and harassment-free.
 
-Unico is an open-source project. Contributions, issue reports, and feedback are welcome when they respect the project’s local-first privacy model.
+Uni radio is an open-source project. Contributions, issue reports, and feedback are welcome when they respect the project’s local-first privacy model.
 
 本项目已开源。
 

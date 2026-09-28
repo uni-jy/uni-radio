@@ -24,6 +24,6 @@ Report privately to the repository owner through GitHub security advisories when
 
 ## Handling Sensitive Data
 
-Unico ignores `.env`, `data/`, and `cache/` by default. If you fork or deploy the project, keep those paths out of public repositories and backups that are not meant to hold private data.
+Uni radio ignores `.env`, `data/`, and `cache/` by default. If you fork or deploy the project, keep those paths out of public repositories and backups that are not meant to hold private data.
 
 The default model is Seed 2.1 Pro through the Volcengine Ark OpenAI-compatible endpoint. Keep `SEED_API_KEY` (or its `VOLCENGINE_API_KEY` alias) in local environment configuration only.

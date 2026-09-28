@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for taking an interest in Unico.
+Thanks for taking an interest in Uni radio.
 
 ## Development Setup
 

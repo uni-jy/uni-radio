@@ -36,6 +36,12 @@ export function buildChatRequest({
     stream,
     temperature,
   };
+  // Seed 2.1 Pro 默认开启深度思考。电台选歌和聊天是实时交互，关闭思考可避免
+  // 一次推荐请求长时间占用连接；需要完整推理时可在 .env 设置 SEED_THINKING=enabled。
+  if (/^doubao-seed/i.test(config.model)) {
+    body.thinking = { type: process.env.SEED_THINKING || "disabled" };
+    body.max_tokens = 2400;
+  }
   return {
     url: `${config.baseUrl}/chat/completions`,
     options: {
@@ -118,14 +124,23 @@ export async function streamChat({
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let full = "";
+    let pending = "";
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const text = decoder.decode(value, { stream: true });
+      pending += decoder.decode(value, { stream: true });
+      const boundary = pending.lastIndexOf("\n");
+      if (boundary < 0) continue;
+      const text = pending.slice(0, boundary + 1);
+      pending = pending.slice(boundary + 1);
       for (const delta of parseSSEDelta(text)) {
         full += delta;
         onDelta?.(delta, full);
       }
+    }
+    for (const delta of parseSSEDelta(pending + decoder.decode())) {
+      full += delta;
+      onDelta?.(delta, full);
     }
     if (!full.trim()) throw new Error("LLM 流式输出为空");
     return full.trim();

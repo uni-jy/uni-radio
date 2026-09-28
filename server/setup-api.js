@@ -551,7 +551,7 @@ export async function handle(req, res, uid, url) {
         return json(res, 400, { error: "这是模型的伪装话术不是真侧写，请点'重新写一份'再来" });
       }
       if (!/^#\s/.test(taste)) {
-        return json(res, 400, { error: "请以 # 开头的 markdown 起笔（点'重新写一份'让 Unico 重出）" });
+        return json(res, 400, { error: "请以 # 开头的 markdown 起笔（点'重新写一份'让 Uni radio 重出）" });
       }
       await fs.writeFile(t.tastePath, taste, "utf8");
       // 顺便写一份默认 routines.md（如果没有）

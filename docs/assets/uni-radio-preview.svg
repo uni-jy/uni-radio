@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
-  <title id="title">Unico app preview</title>
+  <title id="title">Uni radio app preview</title>
   <desc id="desc">A black and white private AI radio interface powered by Seed 2.1 Pro, with vinyl player, chat panel, and queue rail.</desc>
   <defs>
     <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
@@ -34,7 +34,7 @@
   <rect width="1440" height="900" fill="url(#scan)"/>
 
   <g transform="translate(70 52)">
-    <text class="title fg" x="0" y="0" dominant-baseline="hanging">UNICO</text>
+    <text class="title fg" x="0" y="0" dominant-baseline="hanging">UNI RADIO</text>
     <text class="tiny muted" x="2" y="64" dominant-baseline="hanging">PRIVATE AI RADIO</text>
   </g>
 
@@ -70,15 +70,15 @@
 
   <g transform="translate(590 160)">
     <rect class="panel" width="470" height="620"/>
-    <text class="heading fg" x="38" y="36">CHAT WITH UNICO</text>
+    <text class="heading fg" x="38" y="36">CHAT WITH UNI RADIO</text>
     <rect x="45" y="110" width="300" height="70" fill="#111" stroke="#777"/>
     <text class="tiny muted" x="65" y="152">VOICE UPLINK</text>
     <rect x="110" y="212" width="290" height="88" fill="#111" stroke="#999"/>
     <text class="label fg" x="135" y="264">TELL ME WHAT TO PLAY</text>
     <rect x="45" y="340" width="350" height="76" fill="#111" stroke="#777"/>
-    <text class="label fg" x="65" y="388">UNICO IS LISTENING</text>
+    <text class="label fg" x="65" y="388">UNI RADIO IS LISTENING</text>
     <rect x="45" y="530" width="360" height="52" fill="#111" stroke="#aaa"/>
-    <text class="label muted" x="70" y="564">TALK TO UNICO</text>
+    <text class="label muted" x="70" y="564">TALK TO UNI RADIO</text>
   </g>
 
   <g transform="translate(1090 160)">

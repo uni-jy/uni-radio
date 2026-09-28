@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for Unico
+about: Suggest an idea for Uni radio
 title: "[Feature]: "
 labels: enhancement
 assignees: ""
@@ -12,7 +12,7 @@ What problem would this solve?
 
 ## Proposal
 
-What would you like Unico to do?
+What would you like Uni radio to do?
 
 ## Alternatives
 

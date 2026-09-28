@@ -5,6 +5,7 @@ import {
   getLLMConfig,
   parseChatCompletion,
   parseSSEDelta,
+  streamChat,
 } from "../server/llm-client.js";
 
 test("getLLMConfig defaults to Seed 2.1 Pro", () => {
@@ -83,6 +84,17 @@ test("parseChatCompletion returns assistant content", () => {
   assert.equal(text, "{\"ok\":true}");
 });
 
+test("Seed realtime requests disable thinking by default", () => {
+  const previous = process.env.SEED_THINKING;
+  delete process.env.SEED_THINKING;
+  try {
+    const req = buildChatRequest({ config: { apiKey: "test", baseUrl: "https://example.test", model: "doubao-seed-2-1-pro-260915" } });
+    assert.deepEqual(JSON.parse(req.options.body).thinking, { type: "disabled" });
+  } finally {
+    if (previous !== undefined) process.env.SEED_THINKING = previous;
+  }
+});
+
 test("parseSSEDelta extracts streaming content deltas", () => {
   const chunks = parseSSEDelta([
     "data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}",
@@ -90,4 +102,27 @@ test("parseSSEDelta extracts streaming content deltas", () => {
     "data: [DONE]",
   ].join("\n\n"));
   assert.deepEqual(chunks, ["你", "好"]);
+});
+
+test("streamChat preserves SSE events and Chinese text across network boundaries", async () => {
+  const previous = process.env.SEED_API_KEY;
+  process.env.SEED_API_KEY = "test-only";
+  try {
+    const bytes = new TextEncoder().encode('data: {"choices":[{"delta":{"content":"你好"}}]}\n\ndata: {"choices":[{"delta":{"content":"，音乐"}}]}');
+    const deltas = [];
+    const result = await streamChat({
+      user: "test", onDelta: part => deltas.push(part),
+      fetchImpl: async () => new Response(new ReadableStream({
+        start(controller) {
+          for (const byte of bytes) controller.enqueue(Uint8Array.of(byte));
+          controller.close();
+        },
+      })),
+    });
+    assert.equal(result, "你好，音乐");
+    assert.deepEqual(deltas, ["你好", "，音乐"]);
+  } finally {
+    if (previous === undefined) delete process.env.SEED_API_KEY;
+    else process.env.SEED_API_KEY = previous;
+  }
 });

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b0b0e" />
-  <title>Unico</title>
+  <title>Uni radio</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
@@ -14,15 +14,15 @@
     <div class="scanline-layer" aria-hidden="true"></div>
 
     <header class="bar">
-      <a class="brand-lockup scene-jump" href="#onair" data-scene="onair" aria-label="Unico on air">
+      <a class="brand-lockup scene-jump" href="#onair" data-scene="onair" aria-label="Uni radio on air">
         <span class="brand-orb" aria-hidden="true"><span class="dot" id="ws-dot" title="WS"></span></span>
         <span class="brand-copy">
-          <strong>Unico</strong>
+          <strong>Uni radio</strong>
           <span>PRIVATE AI RADIO</span>
         </span>
       </a>
 
-      <nav class="scene-nav" aria-label="Unico scenes">
+      <nav class="scene-nav" aria-label="Uni radio scenes">
         <button class="scene-tab active" data-scene="onair" type="button">ON AIR</button>
         <button class="scene-tab" data-scene="queue" type="button">QUEUE</button>
         <button class="scene-tab" data-scene="mixer" type="button">MIXER</button>
@@ -109,7 +109,7 @@
           <div class="chat-column">
             <div class="scene-heading compact">
               <span>&lt; voice uplink &gt;</span>
-              <h2>CHAT WITH UNICO</h2>
+              <h2>CHAT WITH UNI RADIO</h2>
             </div>
 
             <div class="mid-header">
@@ -131,7 +131,7 @@
             <form class="chat" id="chat-form" autocomplete="off">
               <div class="chat-chips" id="chat-chips" hidden></div>
               <div class="chat-row">
-                <input id="chat-input" type="text" placeholder="和 Unico 说话" />
+                <input id="chat-input" type="text" placeholder="和 Uni radio 说话" />
                 <button type="submit">发送</button>
               </div>
             </form>
@@ -259,7 +259,7 @@
           <div class="card card-large">
             <div class="card-title">
               听众侧写
-              <button class="card-action" id="btn-redraft" title="让 Unico 重新写一份">↻ 重写</button>
+              <button class="card-action" id="btn-redraft" title="让 Uni radio 重新写一份">↻ 重写</button>
             </div>
             <div class="taste-preview" id="taste-preview">加载中…</div>
             <button class="card-link" id="btn-taste-expand">展开全文</button>
@@ -280,11 +280,11 @@
     <div id="setup-overlay" hidden>
       <div class="setup-card">
         <section class="setup-step" data-step="welcome">
-          <h2>欢迎来到 Unico</h2>
+          <h2>欢迎来到 Uni radio</h2>
           <p class="setup-lead">这是一个能"懂你"的私人电台。在开始之前，需要 3 步：</p>
           <ol class="setup-list">
             <li>优先用网易云 App 扫码登录，扫不了就用短信或主页链接</li>
-            <li>让 Unico 读一遍你的歌单和播放记录</li>
+            <li>让 Uni radio 读一遍你的歌单和播放记录</li>
             <li>看它写出来的"听众侧写"，改两笔</li>
           </ol>
           <p class="setup-note">数据只存在主人的电脑上，不会上传到任何第三方。</p>
@@ -306,7 +306,7 @@
 
         <section class="setup-step" data-step="public" hidden>
           <h2>用主页链接导入</h2>
-          <p class="setup-lead">如果网易云拦截登录，先粘贴你的网易云个人主页链接或用户 ID。Unico 会读取公开歌单，先把电台开起来。</p>
+          <p class="setup-lead">如果网易云拦截登录，先粘贴你的网易云个人主页链接或用户 ID。Uni radio 会读取公开歌单，先把电台开起来。</p>
           <label class="setup-field">
             <span>网易云主页链接 / 用户 ID</span>
             <input id="setup-public-uid" type="text" inputmode="text" placeholder="https://music.163.com/#/user/home?id=..." />
@@ -320,7 +320,7 @@
 
         <section class="setup-step" data-step="sms" hidden>
           <h2>用短信登录网易云</h2>
-          <p class="setup-lead">如果扫码被提示环境异常，直接收网易云验证码登录。Unico 只会把登录态保存在本机，用来读取歌单。</p>
+          <p class="setup-lead">如果扫码被提示环境异常，直接收网易云验证码登录。Uni radio 只会把登录态保存在本机，用来读取歌单。</p>
           <div class="setup-field-row">
             <label class="setup-field small">
               <span>区号</span>
@@ -365,7 +365,7 @@
         </section>
 
         <section class="setup-step" data-step="drafting" hidden>
-          <h2>Unico 正在认识你</h2>
+          <h2>Uni radio 正在认识你</h2>
           <p class="setup-lead">把你的听歌数据交给 AI，让它写一份"听众侧写"。这一步要等 1-3 分钟。</p>
           <div class="boot-eq" aria-hidden="true">
             <span></span><span></span><span></span><span></span><span></span>
@@ -374,7 +374,7 @@
 
         <section class="setup-step" data-step="review" hidden>
           <h2>你看一下，准不准</h2>
-          <p class="setup-lead">这是 Unico 根据你的歌单写的"你是谁"。准的留着，不准的删掉，想补一句就补一句。</p>
+          <p class="setup-lead">这是 Uni radio 根据你的歌单写的"你是谁"。准的留着，不准的删掉，想补一句就补一句。</p>
           <textarea id="setup-taste" rows="22" class="setup-textarea"></textarea>
           <div class="setup-actions">
             <button class="setup-primary" data-go="save">满意，保存</button>
@@ -384,7 +384,7 @@
 
         <section class="setup-step" data-step="done" hidden>
           <h2>都好了</h2>
-          <p class="setup-lead">Unico 已经记下了你是怎么听歌的。</p>
+          <p class="setup-lead">Uni radio 已经记下了你是怎么听歌的。</p>
           <button class="setup-primary" data-go="finish">进入电台</button>
         </section>
 

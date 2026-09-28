@@ -1,4 +1,4 @@
-// Unico PWA player
+// Uni radio PWA player
 import { unlockAudioElement } from "./audio-unlock.js";
 import { createBufferedSender } from "./ws-send.js";
 import { buildPopoutFeatures, buildWindowUrl, getInitialWindowMode, setWindowModePreference } from "./window-mode.js";
@@ -74,6 +74,7 @@ let isDucking = false;
 let restoredPlayback = null;
 let savePlaybackTimer = null;
 let popoutWindow = null;
+let seedConnected = null;
 const bufferedSender = createBufferedSender(() => ws);
 
 // —— 会话统计
@@ -152,7 +153,7 @@ function bubble(kind, text, who) {
 }
 function sys(text) { bubble("system", text); }
 function you(text) { bubble("you", text); }
-function dj(text, kind, who) { bubble("dj " + (kind || ""), text, who || "Unico"); }
+function dj(text, kind, who) { bubble("dj " + (kind || ""), text, who || "Uni radio"); }
 function nowLine(text) { bubble("now", text); }
 
 function startClientSession() {
@@ -266,7 +267,7 @@ function ensureDjBubble() {
   el.className = "bubble dj streaming " + (djStream.kind === "talk" ? "talk" : "");
   const w = document.createElement("div");
   w.className = "who";
-  w.textContent = djStream.kind === "talk" ? "Unico · 聊天" : "Unico · 介绍";
+  w.textContent = djStream.kind === "talk" ? "Uni radio · 聊天" : "Uni radio · 介绍";
   el.appendChild(w);
   const t = document.createElement("div");
   t.className = "dj-text";
@@ -354,6 +355,45 @@ function isBenignAbort(e) {
   if (!e) return false;
   return e.name === "AbortError" ||
     /interrupted by a call to pause|aborted by the user/i.test(e.message || "");
+}
+
+function reportPlaybackError(e) {
+  if (isBenignAbort(e)) return;
+  console.warn("[audio] playback failed", e);
+  if (e?.name === "NotAllowedError") {
+    if (document.getElementById("audio-resume")) return;
+    const notice = document.createElement("div");
+    notice.className = "bubble system";
+    notice.id = "audio-resume";
+    notice.textContent = "浏览器暂停了声音。";
+    const retry = document.createElement("button");
+    retry.textContent = "点击恢复播放";
+    retry.addEventListener("click", () => {
+      audioCtx?.resume();
+      const attempts = [music.play()];
+      if (voice.getAttribute("src")) attempts.push(voice.play());
+      Promise.all(attempts).then(() => notice.remove()).catch(reportPlaybackError);
+    });
+    notice.appendChild(retry);
+    stream.appendChild(notice);
+    stream.scrollTop = stream.scrollHeight;
+  } else {
+    sys("这段音频暂时无法播放，可以重试或切换下一首。");
+  }
+}
+
+function renderSeedBadge(track = currentTrack) {
+  const badge = $("src-badge");
+  if (!badge) return;
+  if (seedConnected === null) {
+    badge.textContent = "Seed 待连接";
+    return;
+  }
+  if (seedConnected === false) {
+    badge.textContent = "↺ Seed 重连中";
+    return;
+  }
+  badge.textContent = "✓ Seed 已连接";
 }
 
 async function startSayNow(sayUrl) {
@@ -630,9 +670,9 @@ async function restorePlaybackState() {
 function updateMediaSession(track) {
   if (!("mediaSession" in navigator) || !track) return;
   navigator.mediaSession.metadata = new MediaMetadata({
-    title: track.title || "Unico",
+    title: track.title || "Uni radio",
     artist: track.artist || "",
-    album: "Unico",
+    album: "Uni radio",
     artwork: track.picUrl ? [{ src: track.picUrl }] : [],
   });
   navigator.mediaSession.setActionHandler("play", () => send({ type: "control", action: "play" }));
@@ -668,8 +708,7 @@ function setNow(track) {
   $("np-artist").textContent = track.artist || "—";
   $("silent-title").textContent = track.title || "—";
   $("silent-artist").textContent = track.artist || "—";
-  const badgePrefix = track.degraded ? "↺ " : (track.exploration ? "✦ " : "");
-  $("src-badge").textContent = badgePrefix + (track.degraded ? "Seed 重连中" : (track.source || "—"));
+  renderSeedBadge(track);
   setCover(track.picUrl || "");
   updateMediaSession(track);
   setLyric(null);
@@ -690,15 +729,14 @@ function applyMusicState() {
     if (!music.paused) music.pause();
     if (!voice.paused) voice.pause();
   } else {
-    if (music.paused) music.play().catch((e) => { if (!isBenignAbort(e)) sys("music.play 被拒：" + e.message); });
+    if (music.paused) music.play().catch(reportPlaybackError);
   }
   updateVinylSpin();
 }
 
 function applyRole() {
   if (isActive) {
-    const badgePrefix = currentTrack?.degraded ? "↺ " : (currentTrack?.exploration ? "✦ " : "");
-    $("src-badge").textContent = badgePrefix + (currentTrack?.degraded ? "Seed 重连中" : (currentTrack?.source || "playing"));
+    renderSeedBadge(currentTrack);
     $("btn-start").textContent = started ? "已开台" : "开始今日电台";
     $("btn-start").hidden = !!started;
   } else {
@@ -736,7 +774,7 @@ setInterval(() => { if (session.startedAt) refreshStats(); }, 60000);
 function pushRecent(track, fb) {
   if (!track || !track.title) return;
   // 跳过占位状态
-  if (track.title === "Unico 待机" || !track.url) return;
+  if (track.title === "Uni radio 待机" || !track.url) return;
   // 同一首不要重复推
   if (session.recent[0] && session.recent[0].title === track.title && session.recent[0].artist === track.artist) return;
   session.recent.unshift({
@@ -891,7 +929,7 @@ $("taste-modal").addEventListener("click", (e) => {
 });
 $("btn-redraft").addEventListener("click", async () => {
   if (!confirm("重新生成听众侧写？这要 1-3 分钟，期间不影响播放。")) return;
-  $("taste-preview").textContent = "正在让 Unico 重新认识你…";
+  $("taste-preview").textContent = "正在让 Uni radio 重新认识你…";
   try {
     await fetch("/api/setup/draft", { method: "POST" });
     const deadline = Date.now() + 5 * 60_000;
@@ -1004,7 +1042,7 @@ function connectWS() {
   ws = new WebSocket(`${proto}//${location.host}/stream`);
   ws.onopen = () => {
     $("ws-dot").classList.add("on");
-    sys("已连上 Unico");
+    sys("已连上 Uni radio");
     bufferedSender.setSocket(ws);
     startHeartbeat();
     send({ type: "setting", key: "midsong", value: prefs.midsong });
@@ -1033,23 +1071,23 @@ function connectWS() {
     }
     if (m.type === "now") {
       setNow(m.track);
-      if (!m.track?.url || m.track.title === "Unico 待机") hideBoot();
+      if (!m.track?.url || m.track.title === "Uni radio 待机") hideBoot();
       // 占位状态不写进对话流
-      if (m.track.title && m.track.title !== "Unico 待机" && m.track.url) {
+      if (m.track.title && m.track.title !== "Uni radio 待机" && m.track.url) {
         nowLine(`▶ ${m.track.title || "—"} — ${m.track.artist || "—"}`);
         pushRecent(m.track, null);
       }
       // 切歌：清空上一首遗留的 streaming 状态
       resetDjStream(m.track.id || m.track.url, "intro");
       setThinking("");
-      if (m.track.title && m.track.title !== "Unico 待机" && m.track.url) hideBootSoon();
+      if (m.track.title && m.track.title !== "Uni radio 待机" && m.track.url) hideBootSoon();
     }
     if (m.type === "queue") {
       session.queue = Array.isArray(m.tracks) ? m.tracks : [];
       session.queueLoading = !!m.loading;
       renderQueue();
       savePlaybackStateSoon();
-      if (!session.queueLoading && (!currentTrack?.url || currentTrack.title === "Unico 待机")) hideBoot();
+      if (!session.queueLoading && (!currentTrack?.url || currentTrack.title === "Uni radio 待机")) hideBoot();
     }
     if (m.type === "dj-chunk") {
       // 新 streamId（新歌的 intro 或新一条 talk）→ 重置 bubble + 队列 + 打断旧音频
@@ -1083,7 +1121,7 @@ function connectWS() {
     if (m.type === "chat-fail") sys("× " + (m.reason || "fail") + (m.error ? " — " + m.error.slice(0, 120) : ""));
     if (m.type === "guide") renderGuide(m);
     if (m.type === "dj") {
-      const tag = { talk: "Unico · 聊天", intro: "Unico · 介绍", tease: "Unico · 预告", mid: "Unico · 中段" }[m.kind] || "Unico";
+      const tag = { talk: "Uni radio · 聊天", intro: "Uni radio · 介绍", tease: "Uni radio · 预告", mid: "Uni radio · 中段" }[m.kind] || "Uni radio";
       dj(m.say, m.kind || "intro", tag);
       if (m.mood_shift) sys("情绪 → " + m.mood_shift + "（下一首会跟着调）");
       if (m.exploration) sys("✦ 这是探索性推荐");
@@ -1133,14 +1171,23 @@ function connectWS() {
     if (m.type === "claude-state") {
       const banner = document.getElementById("claude-banner");
       const msg = document.getElementById("claude-banner-msg");
+      seedConnected = m.open || m.status === "unavailable" ? false
+        : m.status === "unknown" ? null : true;
+      renderSeedBadge();
+      if (!m.open && m.status === "unavailable") return;
+      if (m.status === "unknown") return;
       if (m.open) {
+        seedConnected = false;
         const mins = Math.ceil((m.remainingMs || 0) / 60000);
         msg.textContent = `AI 模型暂时不可用（${m.failures || 0} 次连续失败），${mins} 分钟后自动重试。期间播音乐但没有乐评。`;
         banner.removeAttribute("hidden");
         sys("⚠ AI 模型熔断器开启");
+        renderSeedBadge();
       } else {
+        seedConnected = true;
         banner.setAttribute("hidden", "");
-        sys("✓ AI 模型服务恢复");
+        if (m.reason === "recovered") sys("✓ Seed 已恢复连接");
+        renderSeedBadge();
       }
     }
   };
@@ -1167,7 +1214,7 @@ async function startBootChain(payload) {
   $("np-artist").textContent = track.artist || "—";
   $("silent-title").textContent = track.title || "—";
   $("silent-artist").textContent = track.artist || "—";
-  $("src-badge").textContent = track.source || "—";
+  renderSeedBadge(track);
   setCover(track.picUrl || "");
   setLyric(null);
   pushRecent(track, null);
@@ -1177,24 +1224,24 @@ async function startBootChain(payload) {
 
   if (greetingUrl) {
     try {
-      dj(greetingText || "", "intro", "Unico · 开场");
+      dj(greetingText || "", "intro", "Uni radio · 开场");
       voice.src = greetingUrl;
       setDuck(false);
       await voice.play();
       await new Promise((r) => voice.addEventListener("ended", r, { once: true }));
-    } catch (e) { if (!isBenignAbort(e)) sys("greeting 失败：" + e.message); }
+    } catch (e) { reportPlaybackError(e); }
   }
 
   nowLine(`▶ ${track.title} — ${track.artist}`);
-  music.play().catch((e) => { if (!isBenignAbort(e)) sys("music.play 被拒：" + e.message); });
+  music.play().catch(reportPlaybackError);
   updateVinylSpin();
   if (introUrl) {
     try {
       voice.src = introUrl;
       setDuck(true);
       await voice.play();
-    } catch (e) { if (!isBenignAbort(e)) sys("intro 失败：" + e.message); setDuck(false); }
-    if (introText) dj(introText, "intro", "Unico · 介绍");
+    } catch (e) { reportPlaybackError(e); setDuck(false); }
+    if (introText) dj(introText, "intro", "Uni radio · 介绍");
   }
 }
 
@@ -1210,7 +1257,7 @@ function setControlsActive(on) {
 }
 $("btn-start").addEventListener("click", () => {
   started = true;
-  if (!currentTrack?.url || currentTrack.title === "Unico 待机") showBoot();
+  if (!currentTrack?.url || currentTrack.title === "Uni radio 待机") showBoot();
   setControlsActive(true);
   $("btn-start").disabled = true;
   $("btn-start").hidden = true;
@@ -1261,7 +1308,9 @@ music.addEventListener("ended", () => {
 });
 music.addEventListener("error", () => {
   const code = music.error?.code;
-  sys("music error: " + code + "（自动跳下一首）");
+  // 浏览器自动播放/网易云直链失败属于播放器内部恢复流程，不把技术错误
+  // 暴露到用户对话流；保留控制台日志供排查。
+  console.warn("[music] playback error", code);
   if (isActive) send({ type: "track-error", url: music.src, code });
 });
 
@@ -1569,7 +1618,7 @@ async function setupPublicImport() {
     });
     if (!ok) throw new Error(d.error || "公开歌单导入失败");
     $("setup-import-msg").textContent =
-      `${d.nickname}：${d.created} 个公开自建歌单 / ${d.subscribed || 0} 个收藏歌单。下一步让 Unico 读一下…`;
+      `${d.nickname}：${d.created} 个公开自建歌单 / ${d.subscribed || 0} 个收藏歌单。下一步让 Uni radio 读一下…`;
     setTimeout(setupRunDraft, 800);
   } catch (e) {
     setupError("公开歌单导入失败：" + e.message);
@@ -1582,7 +1631,7 @@ async function setupRunImport() {
     const { ok, data: d } = await fetchJSON("/api/setup/import", { method: "POST" });
     if (!ok) throw new Error(d.error || "导入失败");
     $("setup-import-msg").textContent =
-      `${d.nickname}：${d.created} 个自建歌单 / ${d.week} 首周榜 / ${d.allTime} 首总榜。下一步让 Unico 读一下…`;
+      `${d.nickname}：${d.created} 个自建歌单 / ${d.week} 首周榜 / ${d.allTime} 首总榜。下一步让 Uni radio 读一下…`;
     setTimeout(setupRunDraft, 800);
   } catch (e) {
     setupError("导入失败：" + e.message);

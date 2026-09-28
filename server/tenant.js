@@ -43,7 +43,7 @@ export class Tenant {
     this.settingsPath = path.join(this.dir, "settings.json");
 
     // —— 播放状态
-    this.nowPlaying = { title: "Unico 待机", artist: "—", url: null, source: "local" };
+    this.nowPlaying = { title: "Uni radio 待机", artist: "—", url: null, source: "local" };
     this.playState = { paused: true };
     this.queue = [];
     this.prefetching = false;
@@ -181,6 +181,7 @@ export class Tenant {
 
   invalidatePrefetch() {
     this.prefetchToken++;
+    this.prefetching = false;
     this.queue = [];
   }
 
