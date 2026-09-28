@@ -55,7 +55,7 @@ test("getLLMConfig keeps DeepSeek as a backward-compatible fallback", () => {
   });
 });
 
-test("getLLMConfig can force DeepSeek while Seed variables remain configured", () => {
+test("getLLMConfig can force the fallback while Seed variables remain configured", () => {
   const env = {
     LLM_PROVIDER: "deepseek",
     SEED_API_KEY: "seed-key",

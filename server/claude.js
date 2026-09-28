@@ -1,4 +1,4 @@
-// LLM 适配器：直接调用火山引擎 Seed / OpenAI-compatible HTTP API
+// LLM 适配器：直接调用主模型；不可用时切换到备用通道
 // 用法：const out = await ask({ system, user });
 //   out = { say, play:[{query,reason}], reason, segue }
 import { completeChat, streamChat, getLLMConfig, getDeepSeekConfig } from "./llm-client.js";
