@@ -581,6 +581,7 @@ function compactTrackForState(track) {
     duration: track.duration || 0,
     reason: track.reason || track.pickReason || "",
     exploration: !!track.exploration,
+    degraded: !!track.degraded,
   };
 }
 
@@ -667,7 +668,8 @@ function setNow(track) {
   $("np-artist").textContent = track.artist || "—";
   $("silent-title").textContent = track.title || "—";
   $("silent-artist").textContent = track.artist || "—";
-  $("src-badge").textContent = (track.exploration ? "✦ " : "") + (track.source || "—");
+  const badgePrefix = track.degraded ? "↺ " : (track.exploration ? "✦ " : "");
+  $("src-badge").textContent = badgePrefix + (track.degraded ? "Seed 重连中" : (track.source || "—"));
   setCover(track.picUrl || "");
   updateMediaSession(track);
   setLyric(null);
@@ -695,7 +697,8 @@ function applyMusicState() {
 
 function applyRole() {
   if (isActive) {
-    $("src-badge").textContent = currentTrack?.exploration ? "✦ " : (currentTrack?.source || "playing");
+    const badgePrefix = currentTrack?.degraded ? "↺ " : (currentTrack?.exploration ? "✦ " : "");
+    $("src-badge").textContent = badgePrefix + (currentTrack?.degraded ? "Seed 重连中" : (currentTrack?.source || "playing"));
     $("btn-start").textContent = started ? "已开台" : "开始今日电台";
     $("btn-start").hidden = !!started;
   } else {

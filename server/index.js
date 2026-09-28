@@ -332,6 +332,7 @@ function buildTrackWithSay(track, r) {
     sayDelayMs: 0,
     segue: r?.segue || "fade",
     exploration: !!r?.exploration,
+    degraded: !!r?.degraded,
   };
 }
 
@@ -463,7 +464,12 @@ async function prefetchNext(t, { waitForTarget = false, minReady = QUEUE_TARGET 
     for (let attempt = 1; attempt <= 5 && t.queue.length < QUEUE_TARGET; attempt++) {
       if (aborted()) { console.log(`[tenant ${t.uid}] prefetch 作废`); return; }
       if (waitForTarget) {
-        t.broadcast({ type: "boot-progress", step: attempt, total: 5, msg: `正在寻找适合你的音乐（${attempt}/5）…` });
+        t.broadcast({
+          type: "boot-progress",
+          step: attempt,
+          total: 5,
+          msg: `正在寻找适合你的音乐（${attempt}/5）…`,
+        });
       }
       console.log(`[tenant ${t.uid}] prefetch unheard (${trigger}) attempt ${attempt}/5 queue=${t.queue.length}/${QUEUE_TARGET}`);
       const r = await handleChat("", {
@@ -475,6 +481,9 @@ async function prefetchNext(t, { waitForTarget = false, minReady = QUEUE_TARGET 
       });
       if (aborted()) return;
       if (r.ok && r.tracks?.length) {
+        if (waitForTarget && r.degraded) {
+          t.broadcast({ type: "boot-progress", step: attempt, total: 5, msg: "Seed 暂时连接不上，先用探索歌单开台…" });
+        }
         const known = knownTracksFor(t);
         const fresh = filterUnheardCandidates(r.tracks, known);
         for (const cand of fresh) {

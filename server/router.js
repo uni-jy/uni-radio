@@ -109,13 +109,21 @@ async function runDJ(raw, ctx) {
     listeningContext: ctx.listeningContext || ctx.tenant?.listeningContext,
   });
   let out;
+  let degraded = false;
   try { out = await askClaude({ system, user }); }
   catch (e) {
-    if (!intentCandidates.length) return { ok: false, reason: "claude_failed", error: e.message };
+    // Seed 暂时不可用时，自动续播仍然要能开台。优先使用上下文候选，
+    // 没有候选时使用安全探索池，避免用户被卡在黑色加载遮罩里。
+    const fallback = intentCandidates.length
+      ? intentCandidates
+      : SAFE_DISCOVERY.map(([query, reason]) => ({ query, reason }));
+    if (!fallback.length) return { ok: false, reason: "claude_failed", error: e.message };
+    degraded = true;
+    console.warn(`[router] Seed unavailable, using ${fallback.length} fallback candidates: ${e.message}`);
     out = {
-      play: [],
-      say: intentCandidates[0]?.reason || "",
-      reason: intentCandidates[0]?.reason || "",
+      play: fallback,
+      say: intentCandidates[0]?.reason || "Seed 暂时连接不上，我先为你放一首探索歌。",
+      reason: intentCandidates[0]?.reason || "Seed 暂时连接不上，先用探索歌单继续播放。",
       segue: "fade",
       exploration: true,
     };
@@ -124,7 +132,7 @@ async function runDJ(raw, ctx) {
   const tracks = [];
   const maxTracks = Math.max(1, ctx.maxTracks || 1);
   const modelCandidates = Array.isArray(out.play) ? out.play : [];
-  const fallbackCandidates = ctx.userHint === "new" && shouldUseIndieFallback(ctx.tenant)
+  const fallbackCandidates = !degraded && ctx.userHint === "new" && shouldUseIndieFallback(ctx.tenant)
     ? SAFE_DISCOVERY.map(([query, reason]) => ({ query, reason }))
     : [];
   const candidates = [...intentCandidates, ...modelCandidates, ...fallbackCandidates];
@@ -180,6 +188,7 @@ async function runDJ(raw, ctx) {
     ok: true, mode: "dj",
     say: out.say, segue: out.segue, reason: out.reason,
     exploration: !!out.exploration, tracks, misses,
+    degraded,
   };
 }
 
