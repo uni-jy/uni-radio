@@ -1,16 +1,27 @@
 const DEFAULT_MODEL = "doubao-seed-2-1-pro-260915";
 const DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
+const DEFAULT_DEEPSEEK_MODEL = "deepseek-chat";
+const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 
 export function getLLMConfig(env = process.env) {
+  const provider = String(env.LLM_PROVIDER || "").trim().toLowerCase();
   const seedApiKey = env.SEED_API_KEY || env.VOLCENGINE_API_KEY || env.ARK_API_KEY || "";
   const seedBaseUrl = env.SEED_BASE_URL || env.VOLCENGINE_BASE_URL || env.ARK_BASE_URL || "";
-  const hasSeedConfig = !!(seedApiKey || seedBaseUrl || env.SEED_MODEL || env.VOLCENGINE_MODEL);
-  const apiKey = seedApiKey || (!hasSeedConfig && (env.DEEPSEEK_API_KEY ||
-    env.OPENAI_API_KEY ||
+  const deepseekApiKey = env.DEEPSEEK_API_KEY || "";
+  const forceDeepSeek = provider === "deepseek";
+  const hasSeedConfig = !forceDeepSeek && !!(seedApiKey || seedBaseUrl || env.SEED_MODEL || env.VOLCENGINE_MODEL);
+  const hasDeepSeekConfig = !!(deepseekApiKey || env.DEEPSEEK_BASE_URL || env.DEEPSEEK_MODEL);
+  if (forceDeepSeek || (!hasSeedConfig && hasDeepSeekConfig)) {
+    return {
+      apiKey: deepseekApiKey,
+      baseUrl: (env.DEEPSEEK_BASE_URL || DEFAULT_DEEPSEEK_BASE_URL).replace(/\/+$/, ""),
+      model: env.DEEPSEEK_MODEL || env.UNICO_MODEL || DEFAULT_DEEPSEEK_MODEL,
+    };
+  }
+  const apiKey = seedApiKey || (!hasSeedConfig && (env.OPENAI_API_KEY ||
     env.ANTHROPIC_API_KEY ||
     env.ANTHROPIC_AUTH_TOKEN)) || "";
-  const baseUrl = (seedBaseUrl || (!hasSeedConfig && (env.DEEPSEEK_BASE_URL ||
-    env.OPENAI_BASE_URL ||
+  const baseUrl = (seedBaseUrl || (!hasSeedConfig && (env.OPENAI_BASE_URL ||
     env.ANTHROPIC_BASE_URL ||
     "")) || DEFAULT_BASE_URL).replace(/\/+$/, "");
   const model = env.SEED_MODEL || env.VOLCENGINE_MODEL || env.UNICO_MODEL || DEFAULT_MODEL;
@@ -25,7 +36,7 @@ export function buildChatRequest({
   config = getLLMConfig(),
 } = {}) {
   if (!config.apiKey) {
-    throw new Error("LLM API key 未配置：请设置 SEED_API_KEY（或 VOLCENGINE_API_KEY / ARK_API_KEY）");
+    throw new Error("LLM API key 未配置：请设置 SEED_API_KEY 或 DEEPSEEK_API_KEY");
   }
   const body = {
     model: config.model,

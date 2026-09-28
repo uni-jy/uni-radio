@@ -42,6 +42,22 @@ test("getLLMConfig keeps DeepSeek as a backward-compatible fallback", () => {
   });
 });
 
+test("getLLMConfig can force DeepSeek while Seed variables remain configured", () => {
+  const env = {
+    LLM_PROVIDER: "deepseek",
+    SEED_API_KEY: "seed-key",
+    SEED_MODEL: "doubao-seed-2-1-pro-260915",
+    DEEPSEEK_API_KEY: "ds-key",
+    DEEPSEEK_BASE_URL: "https://api.deepseek.com/",
+    DEEPSEEK_MODEL: "deepseek-chat",
+  };
+  assert.deepEqual(getLLMConfig(env), {
+    apiKey: "ds-key",
+    baseUrl: "https://api.deepseek.com",
+    model: "deepseek-chat",
+  });
+});
+
 test("getLLMConfig accepts OpenAI-compatible fallback env", () => {
   const env = {
     OPENAI_API_KEY: "openai-compatible-key",
