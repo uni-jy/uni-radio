@@ -110,7 +110,8 @@ async function runDJ(raw, ctx) {
   });
   let out;
   let degraded = false;
-  try { out = await askClaude({ system, user }); }
+  // 选歌只需要结构化候选，给它独立的短超时；长文本介绍仍使用更长的超时。
+  try { out = await askClaude({ system, user, timeoutMs: 45_000 }); }
   catch (e) {
     // Seed 暂时不可用时，自动续播仍然要能开台。优先使用上下文候选，
     // 没有候选时使用安全探索池，避免用户被卡在黑色加载遮罩里。

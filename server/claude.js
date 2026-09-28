@@ -176,8 +176,8 @@ export async function askRaw({ system, user, timeoutMs }) {
   return String(await runLLM(user, { systemPrompt: system, timeoutMs }));
 }
 
-export async function ask({ system, user }) {
-  const modelText = String(await runLLM(user, { systemPrompt: system }));
+export async function ask({ system, user, timeoutMs = 60_000 }) {
+  const modelText = String(await runLLM(user, { systemPrompt: system, timeoutMs }));
   const parsed = extractJSON(modelText);
   if (!parsed) throw new Error("模型输出不是合法 JSON：" + modelText.slice(0, 400));
   // 字段规范化

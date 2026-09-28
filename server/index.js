@@ -486,7 +486,12 @@ async function prefetchNext(t, { waitForTarget = false, minReady = QUEUE_TARGET 
         }
         const known = knownTracksFor(t);
         const fresh = filterUnheardCandidates(r.tracks, known);
-        for (const cand of fresh) {
+        // 降级模式下模型不可用，安全池可能全部来自用户已导入歌单。
+        // 允许从中取歌先把电台开起来，后续 Seed 恢复后再回到未听过过滤。
+        const candidates = fresh.length || !r.degraded
+          ? fresh
+          : r.tracks.filter((cand) => cand?.title && cand?.artist);
+        for (const cand of candidates) {
           if (t.queue.length >= QUEUE_TARGET) break;
           const built = buildTrackWithSay(cand, { ...r, exploration: true });
           if (aborted()) return;
@@ -494,7 +499,7 @@ async function prefetchNext(t, { waitForTarget = false, minReady = QUEUE_TARGET 
           console.log(`[tenant ${t.uid}] unheard ready: ${built.title} (queue=${t.queue.length}/${QUEUE_TARGET})`);
         }
         broadcastQueue(t);
-        if (!fresh.length) {
+        if (!fresh.length && !r.degraded) {
           console.warn(`[tenant ${t.uid}] batch 里没有未听过的新歌，重新选`);
           await sleep(800);
         }
