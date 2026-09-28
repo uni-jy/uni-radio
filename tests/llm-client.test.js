@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildChatRequest,
+  getDeepSeekConfig,
   getLLMConfig,
   parseChatCompletion,
   parseSSEDelta,
@@ -27,6 +28,18 @@ test("getLLMConfig prefers Seed env", () => {
     baseUrl: "https://ark.example/api/v3",
     model: "doubao-seed-2-1-pro-260915",
   });
+});
+
+test("Seed remains primary when DeepSeek fallback is also configured", () => {
+  const env = {
+    SEED_API_KEY: "seed-key",
+    SEED_BASE_URL: "https://ark.example/api/v3",
+    SEED_MODEL: "doubao-seed-2-1-pro-260915",
+    DEEPSEEK_API_KEY: "ds-key",
+    DEEPSEEK_MODEL: "deepseek-chat",
+  };
+  assert.equal(getLLMConfig(env).model, "doubao-seed-2-1-pro-260915");
+  assert.equal(getDeepSeekConfig(env).model, "deepseek-chat");
 });
 
 test("getLLMConfig keeps DeepSeek as a backward-compatible fallback", () => {

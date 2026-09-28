@@ -28,6 +28,14 @@ export function getLLMConfig(env = process.env) {
   return { apiKey, baseUrl, model };
 }
 
+export function getDeepSeekConfig(env = process.env) {
+  return {
+    apiKey: env.DEEPSEEK_API_KEY || "",
+    baseUrl: (env.DEEPSEEK_BASE_URL || DEFAULT_DEEPSEEK_BASE_URL).replace(/\/+$/, ""),
+    model: env.DEEPSEEK_MODEL || env.UNICO_MODEL || DEFAULT_DEEPSEEK_MODEL,
+  };
+}
+
 export function buildChatRequest({
   system = "",
   user = "",
@@ -90,11 +98,11 @@ export function parseSSEDelta(text) {
   return out;
 }
 
-export async function completeChat({ system, user, timeoutMs = 180_000, fetchImpl = fetch } = {}) {
+export async function completeChat({ system, user, timeoutMs = 180_000, config, fetchImpl = fetch } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error("llm timeout")), timeoutMs);
   try {
-    const req = buildChatRequest({ system, user, stream: false });
+    const req = buildChatRequest({ system, user, stream: false, config });
     const resp = await fetchImpl(req.url, { ...req.options, signal: controller.signal });
     const body = await resp.text();
     if (!resp.ok) throw new Error(`LLM HTTP ${resp.status}: ${body.slice(0, 300)}`);
@@ -110,6 +118,7 @@ export async function streamChat({
   onDelta,
   timeoutMs = 90_000,
   signal,
+  config,
   fetchImpl = fetch,
 } = {}) {
   const controller = new AbortController();
@@ -119,7 +128,7 @@ export async function streamChat({
     else signal.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
   }
   try {
-    const req = buildChatRequest({ system, user, stream: true });
+    const req = buildChatRequest({ system, user, stream: true, config });
     const resp = await fetchImpl(req.url, { ...req.options, signal: controller.signal });
     if (!resp.ok) {
       const body = await resp.text().catch(() => "");

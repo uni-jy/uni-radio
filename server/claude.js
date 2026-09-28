@@ -1,10 +1,18 @@
 // LLM 适配器：直接调用火山引擎 Seed / OpenAI-compatible HTTP API
 // 用法：const out = await ask({ system, user });
 //   out = { say, play:[{query,reason}], reason, segue }
-import { completeChat, streamChat, getLLMConfig } from "./llm-client.js";
+import { completeChat, streamChat, getLLMConfig, getDeepSeekConfig } from "./llm-client.js";
 
 const DEFAULT_TIMEOUT_MS = 180_000;
 export const MODEL = getLLMConfig().model;
+const PRIMARY_CONFIG = getLLMConfig();
+const FALLBACK_CONFIG = getDeepSeekConfig();
+const CAN_FALLBACK = !!FALLBACK_CONFIG.apiKey &&
+  (FALLBACK_CONFIG.baseUrl !== PRIMARY_CONFIG.baseUrl || FALLBACK_CONFIG.model !== PRIMARY_CONFIG.model);
+
+function fallbackLabel() {
+  return `${FALLBACK_CONFIG.model} @ ${FALLBACK_CONFIG.baseUrl}`;
+}
 
 // —— 熔断器：连续 5 次失败 → 锁死 5 分钟不再调用 LLM
 const BREAKER = {
@@ -58,17 +66,29 @@ export const breaker = { isOpen: isBreakerOpen, remaining: remainingMs, onChange
   status: () => ({ open: isBreakerOpen(), status: BREAKER.status }) };
 
 async function runLLM(prompt, { systemPrompt, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-  if (isBreakerOpen()) {
-    throw new LLMUnavailable(remainingMs());
-  }
+  let primaryError = null;
+  if (isBreakerOpen()) primaryError = new LLMUnavailable(remainingMs());
   try {
-    const text = await completeChat({ system: systemPrompt, user: prompt, timeoutMs });
-    noteSuccess();
-    return text;
+    if (!primaryError) {
+      const text = await completeChat({ system: systemPrompt, user: prompt, timeoutMs, config: PRIMARY_CONFIG });
+      noteSuccess();
+      return text;
+    }
   } catch (e) {
+    primaryError = e;
     noteFailure(e);
-    throw e;
   }
+  if (CAN_FALLBACK) {
+    try {
+      const text = await completeChat({ system: systemPrompt, user: prompt, timeoutMs, config: FALLBACK_CONFIG });
+      console.warn(`[llm] Seed unavailable; using DeepSeek fallback (${fallbackLabel()})`);
+      noteSuccess();
+      return text;
+    } catch (fallbackError) {
+      console.warn(`[llm] DeepSeek fallback failed: ${fallbackError.message}`);
+    }
+  }
+  throw primaryError;
 }
 
 /** 提取首个 JSON 对象（容忍 markdown / 前后白噪音） */
@@ -116,17 +136,38 @@ export async function askIntro({ track, recentPlays = [], userTaste = "" }) {
 
 /** 流式 LLM 调用通用核心：OpenAI-compatible SSE，逐 token 回调，返回完整 text */
 async function runLLMStreaming({ system, user, onDelta, signal, timeoutMs = 90_000 }) {
-  if (isBreakerOpen()) throw new LLMUnavailable(remainingMs());
+  let primaryError = null;
+  let emitted = false;
+  const forwardDelta = (delta, total) => {
+    emitted = true;
+    onDelta?.(delta, total);
+  };
+  if (isBreakerOpen()) primaryError = new LLMUnavailable(remainingMs());
   try {
-    const text = await streamChat({ system, user, onDelta, signal, timeoutMs });
-    noteSuccess();
-    const cleaned = text.replace(/^```\w*\n?/g, "").replace(/\n?```$/g, "").trim();
-    if (!cleaned || cleaned.length < 2) throw new Error("流式输出为空");
-    return cleaned;
+    if (!primaryError) {
+      const text = await streamChat({ system, user, onDelta: forwardDelta, signal, timeoutMs, config: PRIMARY_CONFIG });
+      noteSuccess();
+      const cleaned = text.replace(/^```\w*\n?/g, "").replace(/\n?```$/g, "").trim();
+      if (!cleaned || cleaned.length < 2) throw new Error("流式输出为空");
+      return cleaned;
+    }
   } catch (e) {
+    primaryError = e;
     noteFailure(e);
-    throw e;
   }
+  if (CAN_FALLBACK && !emitted && !signal?.aborted) {
+    try {
+      const text = await streamChat({ system, user, onDelta, signal, timeoutMs, config: FALLBACK_CONFIG });
+      console.warn(`[llm] Seed stream unavailable; using DeepSeek fallback (${fallbackLabel()})`);
+      noteSuccess();
+      const cleaned = text.replace(/^```\w*\n?/g, "").replace(/\n?```$/g, "").trim();
+      if (!cleaned || cleaned.length < 2) throw new Error("流式输出为空");
+      return cleaned;
+    } catch (fallbackError) {
+      console.warn(`[llm] DeepSeek stream fallback failed: ${fallbackError.message}`);
+    }
+  }
+  throw primaryError;
 }
 
 /** 流式版 askIntro：每段文本到达就回调 onDelta(deltaText, totalText)。返回完整 prose。 */
