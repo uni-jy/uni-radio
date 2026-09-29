@@ -38,8 +38,10 @@ const MIME = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function synthForTenant(t, text) {
-  const selectedVoice = t?.settings?.ttsVoice === "uni" ? "uni" : "default";
+async function synthForTenant(t, text, voiceOverride = null) {
+  const selectedVoice = voiceOverride === "uni" || voiceOverride === "default"
+    ? voiceOverride
+    : (t?.settings?.ttsVoice === "uni" ? "uni" : "default");
   const defaultVoiceId = t?.settings?.fishVoiceId || process.env.FISH_VOICE_ID;
   const uniVoiceId = process.env.FISH_UNI_VOICE_ID || UNI_FISH_VOICE_ID;
   const result = await synth(text, {
@@ -48,8 +50,9 @@ async function synthForTenant(t, text) {
     provider: selectedVoice === "uni" ? "fish" : t?.settings?.ttsProvider,
     voiceId: selectedVoice === "uni" ? uniVoiceId : (defaultVoiceId || t?.settings?.voiceId),
     macVoice: t?.settings?.macVoice,
+    strictFish: selectedVoice === "uni",
   });
-  t?.broadcast?.({ type: "tts-provider", provider: result.provider, cached: !!result.cached });
+  t?.broadcast?.({ type: "tts-provider", provider: result.provider, cached: !!result.cached, voice: selectedVoice });
   return result;
 }
 
@@ -357,14 +360,25 @@ function buildTrackWithSay(track, r) {
 function makeSentenceSplitter(onSentence) {
   let buf = "";
   const SENT_RX = /^([\s\S]*?[。！？!?])/; // 不用句号 "." 避免歌名里的英文 "." 误切
+  const SOFT_LIMIT = 42;
+  const HARD_LIMIT = 72;
   return {
     push(delta) {
       buf += delta;
       while (true) {
         const m = buf.match(SENT_RX);
-        if (!m) break;
-        const sentence = m[1].trim();
-        buf = buf.slice(m[1].length);
+        let cut = m?.[1]?.length || 0;
+        // 模型偶尔很久不吐句号；达到软上限时在逗号处先发一段，
+        // 再到硬上限直接切开，避免首段乐评一直等到整段生成完。
+        if (!cut && buf.length >= SOFT_LIMIT) {
+          const prefix = buf.slice(0, SOFT_LIMIT + 12);
+          const comma = Math.max(prefix.lastIndexOf("，"), prefix.lastIndexOf(","), prefix.lastIndexOf("；"), prefix.lastIndexOf(";"));
+          if (comma >= Math.floor(SOFT_LIMIT * 0.65)) cut = comma + 1;
+          else if (buf.length >= HARD_LIMIT) cut = HARD_LIMIT;
+        }
+        if (!cut) break;
+        const sentence = buf.slice(0, cut).trim();
+        buf = buf.slice(cut);
         if (sentence) onSentence(sentence);
       }
     },
@@ -380,6 +394,10 @@ function makeSentenceSplitter(onSentence) {
 // chunkKind: "intro" | "talk"
 function streamChunksFor(t, opts) {
   const { chunkKind, trackId } = opts;
+  // 一条播报锁定开始时的音色，避免用户切换设置时同一条播报前后变声。
+  const streamVoice = opts.voiceOverride === "uni" || opts.voiceOverride === "default"
+    ? opts.voiceOverride
+    : (t?.settings?.ttsVoice === "uni" ? "uni" : "default");
   let chunkIdx = 0;
   let fullText = "";
   const onSentence = (sentence) => {
@@ -387,17 +405,23 @@ function streamChunksFor(t, opts) {
     const idx = chunkIdx++;
     fullText += (fullText ? " " : "") + sentence;
     t.broadcast({ type: "dj-chunk", idx, trackId, kind: chunkKind, text: sentence, final: false });
-    synthForTenant(t, sentence).then(({ url }) => {
+    synthForTenant(t, sentence, streamVoice).then(({ url }) => {
       if (opts.aborted && opts.aborted()) return;
       t.broadcast({ type: "dj-chunk-audio", idx, trackId, kind: chunkKind, sayUrl: url });
-    }).catch((e) => console.warn(`[stream-${chunkKind}] tts ${idx}: ${e.message}`));
+    }).catch((e) => {
+      console.warn(`[stream-${chunkKind}] tts ${idx}: ${e.message}`);
+      if (!opts.aborted || !opts.aborted()) {
+        // 告诉客户端跳过失败片段，否则收到 final 后会一直等这个序号。
+        t.broadcast({ type: "dj-chunk-audio", idx, trackId, kind: chunkKind, failed: true });
+      }
+    });
   };
   const splitter = makeSentenceSplitter(onSentence);
   return {
     push: (delta) => splitter.push(delta),
     finalize: () => {
       splitter.flush();
-      t.broadcast({ type: "dj-chunk", idx: chunkIdx, trackId, kind: chunkKind, text: "", final: true });
+      t.broadcast({ type: "dj-chunk", idx: chunkIdx, audioCount: chunkIdx, trackId, kind: chunkKind, text: "", final: true });
       return fullText;
     },
   };
@@ -407,7 +431,8 @@ async function streamTalkReply(t, userText) {
   const trackId = "talk-" + Date.now();
   const myToken = ++t._streamToken;
   const aborted = () => myToken !== t._streamToken;
-  const pipe = streamChunksFor(t, { chunkKind: "talk", trackId, aborted });
+  const streamVoice = t?.settings?.ttsVoice === "uni" ? "uni" : "default";
+  const pipe = streamChunksFor(t, { chunkKind: "talk", trackId, aborted, voiceOverride: streamVoice });
   try {
     await askTalkStreaming({
       user: userText,
@@ -424,10 +449,11 @@ async function streamTalkReply(t, userText) {
     try {
       const r = await askTalk({ user: userText, currentTrack: t.nowPlaying, recentPlays: t.recentPlays });
       if (aborted() || !r.say) return;
-      const { url } = await synthForTenant(t, r.say).catch(() => ({ url: null }));
+      const { url } = await synthForTenant(t, r.say, streamVoice).catch(() => ({ url: null }));
       if (aborted()) return;
-      t.broadcast({ type: "dj-chunk", idx: 0, trackId, kind: "talk", text: r.say, final: true });
+      t.broadcast({ type: "dj-chunk", idx: 0, audioCount: 1, trackId, kind: "talk", text: r.say, final: true });
       if (url) t.broadcast({ type: "dj-chunk-audio", idx: 0, trackId, kind: "talk", sayUrl: url });
+      else t.broadcast({ type: "dj-chunk-audio", idx: 0, trackId, kind: "talk", failed: true });
     } catch (e2) {
       console.warn(`[tenant ${t.uid}] fallback talk: ${e2.message}`);
     }
@@ -440,7 +466,8 @@ async function streamIntroForTrack(t, track) {
   const myToken = ++t._streamToken;
   const aborted = () => myToken !== t._streamToken || t.nowPlaying?.url !== track.url;
   const trackId = track.id || track.url;
-  const pipe = streamChunksFor(t, { chunkKind: "intro", trackId, aborted });
+  const streamVoice = t?.settings?.ttsVoice === "uni" ? "uni" : "default";
+  const pipe = streamChunksFor(t, { chunkKind: "intro", trackId, aborted, voiceOverride: streamVoice });
   try {
     await askIntroStreaming({
       track,
@@ -458,10 +485,14 @@ async function streamIntroForTrack(t, track) {
     try {
       const intro = await askIntro({ track, recentPlays: t.recentPlays, userTaste: t.readFile(t.tastePath) });
       if (aborted()) return;
-      const { url } = await synthForTenant(t, intro);
+      const { url } = await synthForTenant(t, intro, streamVoice).catch((e) => {
+        console.warn(`[tenant ${t.uid}] fallback intro tts: ${e.message}`);
+        return { url: null };
+      });
       if (aborted()) return;
-      t.broadcast({ type: "dj-chunk", idx: 0, trackId, kind: "intro", text: intro, final: true });
-      t.broadcast({ type: "dj-chunk-audio", idx: 0, trackId, kind: "intro", sayUrl: url });
+      t.broadcast({ type: "dj-chunk", idx: 0, audioCount: 1, trackId, kind: "intro", text: intro, final: true });
+      if (url) t.broadcast({ type: "dj-chunk-audio", idx: 0, trackId, kind: "intro", sayUrl: url });
+      else t.broadcast({ type: "dj-chunk-audio", idx: 0, trackId, kind: "intro", failed: true });
       if (t.nowPlaying.url === track.url) t.nowPlaying.fullSay = intro;
     } catch (e2) {
       console.warn(`[tenant ${t.uid}] fallback intro 也挂了: ${e2.message}`);
@@ -639,13 +670,13 @@ async function advance(t) {
     broadcastGuide(t, "next");
     broadcastLyricFor(t, t.nowPlaying);
     scheduleTrackEvents(t, t.nowPlaying);
-    // 流式 intro：歌开始 ~5s 后开始流式生成 + 边出文字边并行 TTS
+    // 流式 intro：歌开始约 2s 后开始生成，尽快让第一句进入 TTS
     const startTrack = t.nowPlaying;
     setTimeout(() => {
       if (t.nowPlaying?.url === startTrack.url) {
         streamIntroForTrack(t, startTrack).catch(() => {});
       }
-    }, 5_000);
+    }, 2_000);
     setTimeout(() => prefetchNext(t).catch(() => {}), 500);
     return;
   }
@@ -947,7 +978,15 @@ wss.on("connection", async (ws, req) => {
   if (!t.activeClient) t.activeClient = ws;
 
   ws.send(JSON.stringify({ type: "hello", msg: "Uni radio online", clientId: ws._id, uid, displayName: t.displayName, hasSetup: t.hasSetup() }));
-  ws.send(JSON.stringify({ type: "settings", settings: { ...t.settings, ttsVoice: t.settings.ttsVoice === "uni" ? "uni" : "default" } }));
+  const initialSettings = { ...t.settings };
+  // 没有保存过音色时不强行写入 default，让客户端本地已经选好的 Uni
+  // 可以在服务重启后重新同步回来。
+  if (t.settings.ttsVoice === "uni" || t.settings.ttsVoice === "default") {
+    initialSettings.ttsVoice = t.settings.ttsVoice;
+  } else {
+    delete initialSettings.ttsVoice;
+  }
+  ws.send(JSON.stringify({ type: "settings", settings: initialSettings }));
   ws.send(JSON.stringify({ type: "role", active: ws === t.activeClient }));
   ws.send(JSON.stringify({ type: "now", track: t.nowPlaying }));
   ws.send(JSON.stringify({ type: "state", paused: t.playState.paused }));

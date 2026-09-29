@@ -193,21 +193,33 @@ function setThinking(text) {
 let _volFadeRAF = null;
 function fadeMusicTo(target, duration = 350) {
   if (_volFadeRAF) cancelAnimationFrame(_volFadeRAF);
-  const start = music.volume;
+  const start = musicGain ? musicGain.gain.value : music.volume;
   const t0 = performance.now();
   function step() {
     const elapsed = performance.now() - t0;
     const k = Math.min(1, elapsed / duration);
     const eased = 1 - Math.pow(1 - k, 3);
-    music.volume = start + (target - start) * eased;
+    const value = start + (target - start) * eased;
+    if (musicGain) musicGain.gain.value = value;
+    else music.volume = value;
     if (k < 1) _volFadeRAF = requestAnimationFrame(step);
     else _volFadeRAF = null;
   }
   step();
 }
 function applyVolumes() {
-  music.volume = prefs.musicVolume * (isDucking ? DUCK_FACTOR : 1);
-  voice.volume = prefs.voiceVolume;
+  const musicLevel = prefs.musicVolume * (isDucking ? DUCK_FACTOR : 1);
+  if (musicGain && voiceGain) {
+    // iOS/Safari may ignore HTMLMediaElement.volume. GainNodes are applied
+    // in the Web Audio graph and work consistently on tablets as well.
+    music.volume = 1;
+    voice.volume = 1;
+    musicGain.gain.value = musicLevel;
+    voiceGain.gain.value = prefs.voiceVolume;
+  } else {
+    music.volume = musicLevel;
+    voice.volume = prefs.voiceVolume;
+  }
 }
 let voiceMuteWarningShown = false;
 function warnIfVoiceMuted() {
@@ -242,7 +254,11 @@ const djStream = {
   kind: null,         // 'intro' | 'talk'
   bubbleEl: null,
   textEl: null,
-  audioQueue: [],     // [{idx, sayUrl}]
+  audioQueue: new Map(), // idx -> {idx, sayUrl}; buffer until the next index arrives
+  nextAudioIdx: 0,
+  currentAudioIdx: null,
+  expectedAudioCount: null,
+  skippedAudio: new Set(),
   playing: false,
   finalized: false,
 };
@@ -259,7 +275,11 @@ function resetDjStream(trackId, kind) {
   djStream.kind = kind || null;
   djStream.bubbleEl = null;
   djStream.textEl = null;
-  djStream.audioQueue = [];
+  djStream.audioQueue = new Map();
+  djStream.nextAudioIdx = 0;
+  djStream.currentAudioIdx = null;
+  djStream.expectedAudioCount = null;
+  djStream.skippedAudio = new Set();
   djStream.finalized = false;
 }
 
@@ -302,20 +322,49 @@ function finalizeDjBubble() {
 
 function queueDjAudio(idx, sayUrl) {
   if (!sayUrl) return;
-  djStream.audioQueue.push({ idx, sayUrl });
-  // 保持顺序：按 idx 升序播
-  djStream.audioQueue.sort((a, b) => a.idx - b.idx);
+  const n = Number(idx);
+  if (!Number.isInteger(n) || n < djStream.nextAudioIdx) return;
+  // TTS 请求是并行的，后面的片段可能先回来；只缓存，不抢播。
+  djStream.audioQueue.set(n, { idx: n, sayUrl });
   if (!djStream.playing) playNextDjAudio();
+}
+
+function pendingDjAudioCount() {
+  return djStream.audioQueue.size;
+}
+
+function advanceSkippedDjAudio() {
+  while (djStream.skippedAudio.has(djStream.nextAudioIdx)) {
+    djStream.skippedAudio.delete(djStream.nextAudioIdx);
+    djStream.audioQueue.delete(djStream.nextAudioIdx);
+    djStream.nextAudioIdx++;
+  }
+}
+
+function skipDjAudio(idx) {
+  const n = Number(idx);
+  if (!Number.isInteger(n) || n < djStream.nextAudioIdx) return;
+  djStream.skippedAudio.add(n);
+  advanceSkippedDjAudio();
+  if (!djStream.playing) playNextDjAudio();
+}
+
+function maybeFinishDjAudio() {
+  if (djStream.playing || !djStream.finalized) return;
+  if (djStream.expectedAudioCount != null && djStream.nextAudioIdx < djStream.expectedAudioCount) return;
+  if (!pendingDjAudioCount()) setDuck(false);
 }
 
 async function playNextDjAudio() {
   if (djStream.playing) return;
-  const item = djStream.audioQueue.shift();
+  advanceSkippedDjAudio();
+  const item = djStream.audioQueue.get(djStream.nextAudioIdx);
   if (!item) {
-    // 没有下一段：如果不再有更多 chunk，松开 duck
-    if (djStream.finalized) setDuck(false);
+    maybeFinishDjAudio();
     return;
   }
+  djStream.audioQueue.delete(djStream.nextAudioIdx);
+  djStream.currentAudioIdx = item.idx;
   djStream.playing = true;
   voice.src = item.sayUrl;
   try {
@@ -324,21 +373,20 @@ async function playNextDjAudio() {
   } catch (e) {
     if (!isBenignAbort(e)) sys("dj chunk 播放失败: " + e.message);
     djStream.playing = false;
-    setDuck(false);
-    // 失败不阻塞，继续下一段
+    djStream.nextAudioIdx = item.idx + 1;
+    djStream.currentAudioIdx = null;
+    // 失败也要推进序号，否则后续片段会永远卡住。
     setTimeout(playNextDjAudio, 100);
   }
 }
 
 voice.addEventListener("ended", () => {
   if (djStream.playing) {
+    const finishedIdx = djStream.currentAudioIdx;
     djStream.playing = false;
-    // 还有就接着播，没有就松开 duck（保留旧逻辑也会触发 setDuck(false)）
-    if (djStream.audioQueue.length) {
-      playNextDjAudio();
-    } else if (djStream.finalized) {
-      setDuck(false);
-    }
+    djStream.currentAudioIdx = null;
+    if (finishedIdx != null) djStream.nextAudioIdx = finishedIdx + 1;
+    playNextDjAudio();
   } else {
     setDuck(false);
   }
@@ -432,7 +480,7 @@ music.addEventListener("playing", () => {
 music.addEventListener("pause", updateVinylSpin);
 music.addEventListener("play", updateVinylSpin);
 // 注：voice.ended 的统一处理在 streaming DJ 块里，避免提前 setDuck(false) 打断队列
-voice.addEventListener("pause", () => { if (voice.ended && !djStream.playing && !djStream.audioQueue.length) setDuck(false); });
+voice.addEventListener("pause", () => { if (voice.ended && !djStream.playing && !pendingDjAudioCount()) maybeFinishDjAudio(); });
 
 async function playOverlay(sayUrl) {
   if (!sayUrl || !isActive) return;
@@ -496,7 +544,7 @@ setInterval(() => {
 const canvas = $("wave");
 const ctx2d = canvas.getContext("2d");
 let waveT0 = performance.now();
-let audioCtx = null, musicSource = null, voiceSource = null, analyser = null, freqData = null;
+let audioCtx = null, musicSource = null, voiceSource = null, musicGain = null, voiceGain = null, analyser = null, freqData = null;
 const BARS = 96;
 const barSmooth = new Float32Array(BARS);
 
@@ -524,12 +572,19 @@ function ensureAudioGraph() {
     freqData = new Uint8Array(analyser.frequencyBinCount);
     musicSource = audioCtx.createMediaElementSource(music);
     voiceSource = audioCtx.createMediaElementSource(voice);
-    musicSource.connect(analyser);
-    voiceSource.connect(analyser);
+    musicGain = audioCtx.createGain();
+    voiceGain = audioCtx.createGain();
+    musicSource.connect(musicGain);
+    voiceSource.connect(voiceGain);
+    musicGain.connect(analyser);
+    voiceGain.connect(analyser);
     analyser.connect(audioCtx.destination);
+    applyVolumes();
   } catch (e) {
     console.warn("AudioContext init 失败：", e.message);
     audioCtx = null;
+    musicGain = null;
+    voiceGain = null;
   }
 }
 
@@ -1082,10 +1137,17 @@ function connectWS() {
       if (isActive && currentTrack?.url) { music.src = proxiedUrl(currentTrack.url); applyMusicState(); }
     }
     if (m.type === "settings") {
-      const voiceChoice = m.settings?.ttsVoice === "uni" ? "uni" : "default";
-      prefs.ttsVoice = voiceChoice;
-      savePrefs();
-      if (ttsVoiceSelect) ttsVoiceSelect.value = voiceChoice;
+      if (m.settings && (m.settings.ttsVoice === "uni" || m.settings.ttsVoice === "default")) {
+        prefs.ttsVoice = m.settings.ttsVoice;
+        savePrefs();
+        if (ttsVoiceSelect) ttsVoiceSelect.value = prefs.ttsVoice;
+      } else {
+        // Vercel 实例重启后可能没有服务端设置；仅在本地明确选过时同步。
+        const savedTtsVoice = localStorage.getItem("unico.ttsVoice");
+        if (savedTtsVoice === "uni" || savedTtsVoice === "default") {
+          send({ type: "setting", key: "ttsVoice", value: savedTtsVoice });
+        }
+      }
     }
     if (m.type === "tts-voice") {
       const voiceChoice = m.value === "uni" ? "uni" : "default";
@@ -1129,12 +1191,17 @@ function connectWS() {
       if (m.final) {
         djStream.finalized = true;
         finalizeDjBubble();
-        if (!djStream.playing && !djStream.audioQueue.length) setDuck(false);
+        djStream.expectedAudioCount = Number.isInteger(m.audioCount)
+          ? m.audioCount
+          : (Number.isInteger(m.idx) ? m.idx + 1 : null);
+        maybeFinishDjAudio();
       }
     }
     if (m.type === "dj-chunk-audio") {
       if (m.trackId !== djStream.trackId) return;
-      if (m.sayUrl) {
+      if (m.failed) {
+        skipDjAudio(m.idx);
+      } else if (m.sayUrl) {
         warnIfVoiceMuted();
         queueDjAudio(m.idx, m.sayUrl);
       }

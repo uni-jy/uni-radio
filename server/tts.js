@@ -129,6 +129,7 @@ export async function synth(text, opts = {}) {
   if (!text || !text.trim()) throw new Error("空文本");
   const apiKey = opts.apiKey || process.env.FISH_API_KEY;
   const voiceId = opts.voiceId || process.env.FISH_VOICE_ID;
+  const strictFish = opts.strictFish === true;
   const forceSay = (opts.provider || process.env.TTS_PROVIDER) === "say";
   const canFish = !forceSay && !fishDisabled && apiKey && voiceId;
 
@@ -156,8 +157,13 @@ export async function synth(text, opts = {}) {
         _undiciFetch = null;
         _fishDispatcher = null;
       }
+      // Uni 是固定音色。Fish 出错时宁可暂时没有这一段，也不要悄悄
+      // 回退到系统女声，导致一条播报中途换音色。
+      if (strictFish) throw e;
     }
   }
+
+  if (strictFish) throw new Error("Fish TTS unavailable for selected voice");
 
   // say 路径：m4a
   const voice = opts.macVoice || "Tingting";
