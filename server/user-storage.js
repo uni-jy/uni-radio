@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { get as blobGet, list as blobList, put as blobPut } from "@vercel/blob";
 import { USERS_DIR } from "./paths.js";
+import { supabaseStorage } from "./supabase-storage.js";
 
 const USER_PREFIX = "users";
 
@@ -18,18 +18,14 @@ function userBlobPrefix(uid) {
   return `${USER_PREFIX}/${uid}/`;
 }
 
-function hasBlobEnv() {
-  return !!(process.env.BLOB_READ_WRITE_TOKEN || (process.env.VERCEL_OIDC_TOKEN && process.env.BLOB_STORE_ID));
-}
-
-async function readBlobText(blob, { get, fetcher }) {
+async function readStorageText(objectPath, { get, fetcher, object }) {
   if (get) {
-    const result = await get(blob.pathname, { access: "private", useCache: false });
+    const result = await get(objectPath, { access: "private", useCache: false });
     if (!result || result.statusCode !== 200 || !result.stream) return null;
     return new Response(result.stream).text();
   }
-  const response = await fetcher(blob.downloadUrl || blob.url);
-  if (!response.ok) throw new Error(`blob fetch failed: ${response.status || "unknown"}`);
+  const response = await fetcher?.(object?.downloadUrl || object?.url);
+  if (!response?.ok) throw new Error(`storage fetch failed: ${response?.status || "unknown"}`);
   return response.text();
 }
 
@@ -48,31 +44,35 @@ function walkFiles(dir) {
 }
 
 export function createUserStorage({
-  enabled = hasBlobEnv(),
-  list = blobList,
-  put = blobPut,
-  get = blobGet,
+  enabled = supabaseStorage.enabled,
+  list = supabaseStorage.list,
+  put = supabaseStorage.put,
+  get = supabaseStorage.get,
   fetcher = fetch,
 } = {}) {
   async function hydrateUserFiles(uid) {
     if (!enabled) return { enabled: false, files: 0 };
     const prefix = userBlobPrefix(uid);
-    let cursor;
+    let offset = 0;
     let files = 0;
-    do {
-      const page = await list({ prefix, cursor, limit: 1000 });
-      for (const blob of page.blobs || []) {
-        const rel = blob.pathname.slice(prefix.length);
+    while (true) {
+      const listed = await list({ prefix, offset, limit: 1000 });
+      const objects = Array.isArray(listed) ? listed : (listed?.blobs || []);
+      for (const object of objects) {
+        const name = String(object.name || object.pathname || "");
+        const objectPath = name.startsWith(prefix) ? name : `${prefix}${name}`;
+        const rel = objectPath.slice(prefix.length);
         if (!isSafeRelativePath(rel)) continue;
-        const text = await readBlobText(blob, { get, fetcher });
+        const text = await readStorageText(objectPath, { get, fetcher, object });
         if (text == null) continue;
         const abs = path.join(userDir(uid), rel);
         fs.mkdirSync(path.dirname(abs), { recursive: true });
         fs.writeFileSync(abs, text, "utf8");
         files += 1;
       }
-      cursor = page.cursor;
-    } while (cursor);
+      if (objects.length < 1000) break;
+      offset += objects.length;
+    }
     return { enabled: true, files };
   }
 
@@ -86,6 +86,7 @@ export function createUserStorage({
       await put(`${userBlobPrefix(uid)}${rel}`, fs.readFileSync(abs), {
         access: "private",
         allowOverwrite: true,
+        contentType: "text/plain; charset=utf-8",
         cacheControlMaxAge: 60,
       });
     }

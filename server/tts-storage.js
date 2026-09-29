@@ -1,11 +1,7 @@
 import fs from "node:fs";
-import { get as blobGet, put as blobPut } from "@vercel/blob";
+import { supabaseStorage } from "./supabase-storage.js";
 
 const TTS_PREFIX = "tts";
-
-function hasBlobEnv() {
-  return !!(process.env.BLOB_READ_WRITE_TOKEN || (process.env.VERCEL_OIDC_TOKEN && process.env.BLOB_STORE_ID));
-}
 
 function isSafeTtsName(name) {
   return /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(mp3|m4a|wav)$/i.test(name || "");
@@ -22,9 +18,9 @@ async function streamToBuffer(stream) {
 }
 
 export function createTtsStorage({
-  enabled = hasBlobEnv(),
-  get = blobGet,
-  put = blobPut,
+  enabled = supabaseStorage.enabled,
+  get = supabaseStorage.get,
+  put = supabaseStorage.put,
 } = {}) {
   async function persistTtsFile(name, file) {
     if (!enabled) return { enabled: false, stored: false };
