@@ -1093,6 +1093,13 @@ function connectWS() {
       savePrefs();
       if (ttsVoiceSelect) ttsVoiceSelect.value = voiceChoice;
     }
+    if (m.type === "tts-preview") {
+      if (m.sayUrl && isActive) playOverlay(m.sayUrl);
+      if (m.provider) {
+        const label = m.voice === "uni" ? "Uni" : "默认女声";
+        sys(`${label} 音色已生效（${m.provider === "fish" ? "Fish" : "系统"}）`);
+      }
+    }
     if (m.type === "now") {
       setNow(m.track);
       if (!m.track?.url || m.track.title === "Uni radio 待机") hideBoot();

@@ -985,6 +985,18 @@ wss.on("connection", async (ws, req) => {
         t.saveSettings();
         ws.send(JSON.stringify({ type: "setting-ack", key: "ttsVoice", value: t.settings.ttsVoice }));
         t.broadcast({ type: "tts-voice", value: t.settings.ttsVoice });
+        // 立刻播一小段试听，避免用户只改了设置却继续听到当前缓存的旧音色。
+        const previewText = t.settings.ttsVoice === "uni"
+          ? "这是 Uni 音色。"
+          : "已切换到默认女声。";
+        synthForTenant(t, previewText)
+          .then((result) => t.broadcast({
+            type: "tts-preview",
+            sayUrl: result.url,
+            provider: result.provider,
+            voice: t.settings.ttsVoice,
+          }))
+          .catch((e) => console.warn(`[tenant ${t.uid}] tts preview: ${e.message}`));
       }
       return;
     }
