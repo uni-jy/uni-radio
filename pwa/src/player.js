@@ -1146,6 +1146,13 @@ function connectWS() {
   ws.onerror = () => sys("WS 错误");
   ws.onmessage = (ev) => {
     let m; try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.type === "hello" && m.storageUnavailable) {
+      sys("× 用户数据存储暂时不可用，请恢复 Vercel Blob 后再开台。");
+    }
+    if (m.type === "fatal") {
+      sys("× " + (m.msg || "连接初始化失败"));
+      return;
+    }
     if (m.type === "role") {
       isActive = !!m.active;
       sys(isActive ? "拿到播放权（这台出声）" : "已转给另一端，这台静音");

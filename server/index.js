@@ -835,8 +835,16 @@ function serveAudioBuffer(req, res, buffer, type) {
 }
 
 async function loadTenant(uid) {
-  await hydrateUserFiles(uid);
-  return getTenant(uid);
+  let storageUnavailable = false;
+  try {
+    await hydrateUserFiles(uid);
+  } catch (e) {
+    storageUnavailable = true;
+    console.warn(`[tenant ${uid}] user storage unavailable: ${e.message}`);
+  }
+  const t = getTenant(uid);
+  t.storageUnavailable = storageUnavailable;
+  return t;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -866,7 +874,14 @@ const server = http.createServer(async (req, res) => {
   // ---- setup API（首次向导） ----
   if (pathname.startsWith("/api/setup/")) {
     const uid = ensureUidCookie(req, res);
-    await hydrateUserFiles(uid);
+    let storageUnavailable = false;
+    try { await hydrateUserFiles(uid); }
+    catch (e) {
+      storageUnavailable = true;
+      console.warn(`[tenant ${uid}] setup storage unavailable: ${e.message}`);
+    }
+    const t = getTenant(uid);
+    t.storageUnavailable = storageUnavailable;
     const m = await import("./setup-api.js");
     return m.handle(req, res, uid, url);
   }
@@ -902,7 +917,8 @@ const server = http.createServer(async (req, res) => {
       return readJsonBody(req)
         .then(async (body) => {
           const state = savePlaybackState(t, body);
-          await persistUserFiles(uid);
+          try { await persistUserFiles(uid); }
+          catch (e) { console.warn(`[tenant ${uid}] playback persistence skipped: ${e.message}`); }
           return send(res, 200, JSON.stringify(state), {
             "Content-Type": "application/json; charset=utf-8",
           });
@@ -978,7 +994,7 @@ wss.on("connection", async (ws, req) => {
   t.clients.add(ws);
   if (!t.activeClient) t.activeClient = ws;
 
-  ws.send(JSON.stringify({ type: "hello", msg: "Uni radio online", clientId: ws._id, uid, displayName: t.displayName, hasSetup: t.hasSetup() }));
+  ws.send(JSON.stringify({ type: "hello", msg: "Uni radio online", clientId: ws._id, uid, displayName: t.displayName, hasSetup: t.hasSetup(), storageUnavailable: !!t.storageUnavailable }));
   const initialSettings = { ...t.settings };
   // 没有保存过音色时不强行写入 default，让客户端本地已经选好的 Uni
   // 可以在服务重启后重新同步回来。

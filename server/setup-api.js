@@ -323,6 +323,7 @@ export async function handle(req, res, uid, url) {
         hasSetup: t.hasSetup(),
         hasTaste: !!t.readFile(t.tastePath),
         hasPlaylists: !!t.readFile(t.playlistsJsonPath),
+        storageUnavailable: !!t.storageUnavailable,
       });
     }
 
