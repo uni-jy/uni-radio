@@ -43,7 +43,9 @@ async function synthForTenant(t, text) {
   const defaultVoiceId = t?.settings?.fishVoiceId || process.env.FISH_VOICE_ID;
   const uniVoiceId = process.env.FISH_UNI_VOICE_ID || UNI_FISH_VOICE_ID;
   const result = await synth(text, {
-    provider: t?.settings?.ttsProvider,
+    // Uni 是 Fish 专属音色。旧租户可能把 ttsProvider 持久化成 say，
+    // 不能让这个历史设置把 Uni 音色悄悄降级成系统女声。
+    provider: selectedVoice === "uni" ? "fish" : t?.settings?.ttsProvider,
     voiceId: selectedVoice === "uni" ? uniVoiceId : (defaultVoiceId || t?.settings?.voiceId),
     macVoice: t?.settings?.macVoice,
   });
