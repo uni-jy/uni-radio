@@ -6,6 +6,12 @@ const $ = (id) => document.getElementById(id);
 const music = $("audio-music");
 const voice = $("audio-voice");
 const stream = $("stream");
+// Audio/canvas handles are initialized before the volume setup below. This
+// matters for browsers that schedule the first resize callback very early.
+const canvas = $("wave");
+const ctx2d = canvas.getContext("2d");
+let audioCtx = null, musicSource = null, voiceSource = null;
+let musicGain = null, voiceGain = null, analyser = null, freqData = null;
 
 const DUCK_FACTOR = 0.25;
 
@@ -541,10 +547,7 @@ setInterval(() => {
 }, 15000);
 
 // ===== wave canvas =====
-const canvas = $("wave");
-const ctx2d = canvas.getContext("2d");
 let waveT0 = performance.now();
-let audioCtx = null, musicSource = null, voiceSource = null, musicGain = null, voiceGain = null, analyser = null, freqData = null;
 const BARS = 96;
 const barSmooth = new Float32Array(BARS);
 
