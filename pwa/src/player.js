@@ -1104,9 +1104,22 @@ function startHeartbeat() {
 function stopHeartbeat() {
   if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
 }
+function getWsUid() {
+  const cookie = document.cookie.match(/(?:^|;\s*)unico-uid=([^;]+)/)?.[1];
+  if (cookie) return decodeURIComponent(cookie);
+  let uid = localStorage.getItem("unico.uid");
+  if (!/^[a-f0-9]{32}$/i.test(uid || "")) {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    uid = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+    localStorage.setItem("unico.uid", uid);
+  }
+  return uid;
+}
 function connectWS() {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  ws = new WebSocket(`${proto}//${location.host}/stream`);
+  // 部分浏览器/边缘代理在 WebSocket upgrade 时不会转发 cookie，
+  // 把同一个 uid 放到握手 query，避免页面一直停在“未连接”。
+  ws = new WebSocket(`${proto}//${location.host}/stream?uid=${encodeURIComponent(getWsUid())}`);
   ws.onopen = () => {
     $("ws-dot").classList.add("on");
     sys("已连上 Uni radio");

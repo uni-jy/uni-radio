@@ -959,7 +959,8 @@ let _nextClientId = 0;
 wss.on("connection", async (ws, req) => {
   // 从 cookie 取 uid（WS upgrade 请求带的）
   const cookies = parseCookies(req.headers.cookie);
-  let uid = cookies["unico-uid"];
+  const queryUid = new URL(req.url || "/stream", `http://${req.headers.host || "localhost"}`).searchParams.get("uid");
+  let uid = cookies["unico-uid"] || queryUid;
   if (!uid) {
     ws.send(JSON.stringify({ type: "fatal", msg: "缺 uid cookie，请刷新页面" }));
     ws.close();
