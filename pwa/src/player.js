@@ -16,6 +16,7 @@ const prefs = {
   mode: localStorage.getItem("unico.mode") || "chat",       // chat | silent
   theme: localStorage.getItem("unico.theme") || "amber",
   midsong: localStorage.getItem("unico.midsong") !== "0",
+  ttsVoice: localStorage.getItem("unico.ttsVoice") || "default",
   scene: localStorage.getItem("unico.scene") || "onair",
 };
 function savePrefs() {
@@ -24,6 +25,7 @@ function savePrefs() {
   localStorage.setItem("unico.mode", prefs.mode);
   localStorage.setItem("unico.theme", prefs.theme);
   localStorage.setItem("unico.midsong", prefs.midsong ? "1" : "0");
+  localStorage.setItem("unico.ttsVoice", prefs.ttsVoice);
   localStorage.setItem("unico.scene", prefs.scene);
 }
 
@@ -966,6 +968,16 @@ $("set-midsong").addEventListener("change", (e) => {
   send({ type: "setting", key: "midsong", value: prefs.midsong });
   sys(prefs.midsong ? "已开启中段评论" : "已关闭中段评论");
 });
+const ttsVoiceSelect = $("set-tts-voice");
+if (ttsVoiceSelect) {
+  ttsVoiceSelect.value = prefs.ttsVoice;
+  ttsVoiceSelect.addEventListener("change", (e) => {
+    prefs.ttsVoice = e.target.value === "uni" ? "uni" : "default";
+    savePrefs();
+    send({ type: "setting", key: "ttsVoice", value: prefs.ttsVoice });
+    sys(prefs.ttsVoice === "uni" ? "已切换到 Uni 音色" : "已切换到女声");
+  });
+}
 $("set-theme").value = prefs.theme;
 $("set-theme").addEventListener("change", (e) => {
   prefs.theme = e.target.value;
@@ -1068,6 +1080,18 @@ function connectWS() {
       sys(isActive ? "拿到播放权（这台出声）" : "已转给另一端，这台静音");
       applyRole();
       if (isActive && currentTrack?.url) { music.src = proxiedUrl(currentTrack.url); applyMusicState(); }
+    }
+    if (m.type === "settings") {
+      const voiceChoice = m.settings?.ttsVoice === "uni" ? "uni" : "default";
+      prefs.ttsVoice = voiceChoice;
+      savePrefs();
+      if (ttsVoiceSelect) ttsVoiceSelect.value = voiceChoice;
+    }
+    if (m.type === "tts-voice") {
+      const voiceChoice = m.value === "uni" ? "uni" : "default";
+      prefs.ttsVoice = voiceChoice;
+      savePrefs();
+      if (ttsVoiceSelect) ttsVoiceSelect.value = voiceChoice;
     }
     if (m.type === "now") {
       setNow(m.track);

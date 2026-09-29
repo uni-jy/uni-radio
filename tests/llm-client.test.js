@@ -36,10 +36,10 @@ test("Seed remains primary when DeepSeek fallback is also configured", () => {
     SEED_BASE_URL: "https://ark.example/api/v3",
     SEED_MODEL: "doubao-seed-2-1-pro-260915",
     DEEPSEEK_API_KEY: "ds-key",
-    DEEPSEEK_MODEL: "deepseek-chat",
+    DEEPSEEK_MODEL: "deepseek-flash",
   };
   assert.equal(getLLMConfig(env).model, "doubao-seed-2-1-pro-260915");
-  assert.equal(getDeepSeekConfig(env).model, "deepseek-chat");
+  assert.equal(getDeepSeekConfig(env).model, "deepseek-flash");
 });
 
 test("getLLMConfig keeps DeepSeek as a backward-compatible fallback", () => {

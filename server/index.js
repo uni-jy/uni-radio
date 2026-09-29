@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { WebSocketServer } from "ws";
 import { handleChat } from "./router.js";
-import { synth } from "./tts.js";
+import { synth, UNI_FISH_VOICE_ID } from "./tts.js";
 import { resolveOne, lyric as ncmLyric } from "./adapters/ncm.js";
 import { askIntro, askIntroStreaming, askTalk, askTalkStreaming, breaker as claudeBreaker } from "./claude.js";
 import { getTenant, listTenants, newGuestUid, OWNER_UID } from "./tenant.js";
@@ -39,9 +39,12 @@ const MIME = {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function synthForTenant(t, text) {
+  const selectedVoice = t?.settings?.ttsVoice === "uni" ? "uni" : "default";
+  const defaultVoiceId = t?.settings?.fishVoiceId || process.env.FISH_VOICE_ID;
+  const uniVoiceId = process.env.FISH_UNI_VOICE_ID || UNI_FISH_VOICE_ID;
   const result = await synth(text, {
     provider: t?.settings?.ttsProvider,
-    voiceId: t?.settings?.fishVoiceId || t?.settings?.voiceId,
+    voiceId: selectedVoice === "uni" ? uniVoiceId : (defaultVoiceId || t?.settings?.voiceId),
     macVoice: t?.settings?.macVoice,
   });
   t?.broadcast?.({ type: "tts-provider", provider: result.provider, cached: !!result.cached });
@@ -942,6 +945,7 @@ wss.on("connection", async (ws, req) => {
   if (!t.activeClient) t.activeClient = ws;
 
   ws.send(JSON.stringify({ type: "hello", msg: "Uni radio online", clientId: ws._id, uid, displayName: t.displayName, hasSetup: t.hasSetup() }));
+  ws.send(JSON.stringify({ type: "settings", settings: { ...t.settings, ttsVoice: t.settings.ttsVoice === "uni" ? "uni" : "default" } }));
   ws.send(JSON.stringify({ type: "role", active: ws === t.activeClient }));
   ws.send(JSON.stringify({ type: "now", track: t.nowPlaying }));
   ws.send(JSON.stringify({ type: "state", paused: t.playState.paused }));
@@ -973,6 +977,12 @@ wss.on("connection", async (ws, req) => {
         t.saveSettings();
         scheduleTrackEvents(t, t.nowPlaying);
         ws.send(JSON.stringify({ type: "setting-ack", key: "midsong", value: t.settings.midsong }));
+      }
+      if (m.key === "ttsVoice") {
+        t.settings.ttsVoice = m.value === "uni" ? "uni" : "default";
+        t.saveSettings();
+        ws.send(JSON.stringify({ type: "setting-ack", key: "ttsVoice", value: t.settings.ttsVoice }));
+        t.broadcast({ type: "tts-voice", value: t.settings.ttsVoice });
       }
       return;
     }

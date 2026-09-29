@@ -1,6 +1,8 @@
 const DEFAULT_MODEL = "doubao-seed-2-1-pro-260915";
 const DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
-const DEFAULT_DEEPSEEK_MODEL = "deepseek-chat";
+// DeepSeek 官方当前的 Flash API 模型名。旧的 deepseek-v4-flash 仍可能被兼容，
+// 但官方文档已将请求路由到最新 Flash 版本，统一使用 deepseek-flash 更稳妥。
+const DEFAULT_DEEPSEEK_MODEL = "deepseek-flash";
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 
 export function getLLMConfig(env = process.env) {

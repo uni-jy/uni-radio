@@ -62,9 +62,16 @@ SEED_THINKING=disabled
 SEED_API_KEY=your_volcengine_ark_key_here
 SEED_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 
+# DeepSeek V4 Flash fallback. Seed remains primary while SEED_API_KEY is present.
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-flash
+
 # Optional: voice generation. Without this, Uni radio falls back to macOS say.
 FISH_API_KEY=
 FISH_VOICE_ID=
+# Optional: override the built-in Uni voice used by the MIXER selector.
+FISH_UNI_VOICE_ID=618d9299c468406aafc21e2de5ca01b3
 ```
 
 Start the app:
@@ -103,8 +110,13 @@ The public profile path does not require login. It can only read public playlist
 | `UNICO_MODEL` | No | 通用兼容变量，可覆盖模型名。 |
 | `OPENAI_API_KEY` | Yes* | Alternative OpenAI-compatible API key. |
 | `OPENAI_BASE_URL` | No | Alternative OpenAI-compatible base URL. |
+| `DEEPSEEK_API_KEY` | No | DeepSeek API key used as the fallback when Seed is unavailable. |
+| `DEEPSEEK_BASE_URL` | No | Defaults to `https://api.deepseek.com`. |
+| `DEEPSEEK_MODEL` | No | Defaults to `deepseek-flash`, the current DeepSeek Flash model ID. |
+| `LLM_PROVIDER` | No | Set to `deepseek` only when DeepSeek should be primary. Seed remains primary by default. |
 | `FISH_API_KEY` | No | Fish Audio API key for voice synthesis. |
 | `FISH_VOICE_ID` | No | Fish Audio voice id. |
+| `FISH_UNI_VOICE_ID` | No | Optional override for the built-in `Uni` voice (`618d9299c468406aafc21e2de5ca01b3`). |
 | `UNICO_TTS_PROXY` | No | Proxy URL used only for Fish Audio requests. |
 | `TTS_PROVIDER` | No | Set to `say` to force macOS local TTS. |
 | `NCM_RETRIES` | No | Retry count for NetEase API calls. |

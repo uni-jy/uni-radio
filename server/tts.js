@@ -9,6 +9,8 @@ import { TTS_DIR as CACHE_DIR, TMP_DIR } from "./paths.js";
 import { persistTtsFile, readTtsFile } from "./tts-storage.js";
 
 const FISH_API = "https://api.fish.audio/v1/tts";
+// Uni 是项目内置的专属音色；用户也可以在环境变量里覆盖，方便替换成自己的 Fish voice。
+export const UNI_FISH_VOICE_ID = "618d9299c468406aafc21e2de5ca01b3";
 // 一旦命中 402 就标记为不可用，本次进程内不再重试
 let fishDisabled = false;
 
